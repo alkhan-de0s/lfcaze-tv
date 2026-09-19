@@ -3,5 +3,10 @@
   "match": "Liverpool FC - Canlı Maç Yayını",
   "info": "Bugünkü maç yayınları",
   "poster": "https://upload.wikimedia.org/wikipedia/en/thumb/0/0c/Liverpool_FC.svg/800px-Liverpool_FC.svg.png",
-  "channels": []
+  "channels": [
+    {
+      "id": "134",
+      "name": "Yayın 1 (Arena Sport 1 Premium)"
+    }
+  ]
 }
