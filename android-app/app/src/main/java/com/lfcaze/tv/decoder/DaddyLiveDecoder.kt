@@ -1,61 +1,50 @@
 package com.lfcaze.tv.decoder
 
-import android.util.Base64
-import org.json.JSONObject
-import java.nio.charset.StandardCharsets
-
 object DaddyLiveDecoder {
 
-    /**
-     * Reconstructs the original stream payload from the obfuscated window._econfig string.
-     */
-    fun decodeEConfig(obfuscated: String): String? {
+    private fun base64Decode(str: String): ByteArray {
         return try {
-            // Stage 1: Initial Base64 decode
-            val rawBytes = Base64.decode(obfuscated, Base64.DEFAULT)
-            val s = String(rawBytes, StandardCharsets.UTF_8)
-
-            // Stage 2: Divide into 4 equal segments
-            val partLen = s.length / 4
-            val chunks = mutableListOf<String>()
-            for (i in 0 until 4) {
-                val start = i * partLen
-                val end = if (i == 3) s.length else (i + 1) * partLen
-                chunks.add(s.substring(start, end))
+            android.util.Base64.decode(str, android.util.Base64.DEFAULT)
+        } catch (e1: Throwable) {
+            try {
+                java.util.Base64.getDecoder().decode(str.trim())
+            } catch (e2: Throwable) {
+                java.util.Base64.getMimeDecoder().decode(str.trim())
             }
+        }
+    }
 
-            // Stage 3: Drop the character at index 3 in each segment
-            val slicedChunks = chunks.map { chunk ->
-                if (chunk.length > 3) {
-                    chunk.substring(0, 3) + chunk.substring(4)
-                } else {
-                    chunk
-                }
-            }
+    /**
+     * Decodes the obfuscated window._econfig string found in the DaddyLive player embed
+     */
+    fun decodeEConfig(rawBase64: String): String? {
+        return try {
+            val s = String(base64Decode(rawBase64), Charsets.UTF_8)
+            val partsCount = 4
+            val partLen = s.length / partsCount
+            if (partLen <= 3) return null
 
-            // Stage 4: Base64 decode each sliced chunk
-            val decodedSegments = slicedChunks.map { chunk ->
-                Base64.decode(chunk, Base64.DEFAULT)
-            }
-
-            // Stage 5: Reassemble with permutation [2, 0, 3, 1]
-            val permutation = intArrayOf(2, 0, 3, 1)
-            var totalLength = 0
-            for (p in permutation) {
-                totalLength += decodedSegments[p].size
-            }
-
-            val combined = ByteArray(totalLength)
+            val parts = ArrayList<String>(partsCount)
             var offset = 0
-            for (p in permutation) {
-                val seg = decodedSegments[p]
-                System.arraycopy(seg, 0, combined, offset, seg.size)
-                offset += seg.size
+            for (i in 0 until partsCount) {
+                parts.add(s.substring(offset, offset + partLen))
+                offset += partLen
             }
 
-            // Stage 6: Final Base64 decode yielding the clear JSON payload
-            val finalJsonBytes = Base64.decode(combined, Base64.DEFAULT)
-            String(finalJsonBytes, StandardCharsets.UTF_8)
+            val perm = intArrayOf(2, 0, 3, 1)
+            val reordered = Array(4) { "" }
+
+            for (i in perm.indices) {
+                val part = parts[i]
+                if (part.length <= 3) return null
+                // Drop the 4th character (index 3)
+                val trimmed = part.substring(0, 3) + part.substring(4)
+                val decodedChunk = String(base64Decode(trimmed), Charsets.UTF_8)
+                reordered[perm[i]] = decodedChunk
+            }
+
+            val joined = reordered.joinToString("")
+            String(base64Decode(joined), Charsets.UTF_8)
         } catch (e: Throwable) {
             e.printStackTrace()
             null
@@ -63,32 +52,10 @@ object DaddyLiveDecoder {
     }
 
     /**
-     * Extracts the direct .m3u8 stream URL from the decoded JSON configuration.
+     * Extracts the HLS manifest URL (m3u8) from the decoded JSON configuration
      */
     fun extractStreamUrl(jsonString: String): String? {
-        return try {
-            val json = JSONObject(jsonString)
-
-            if (json.has("stream_url")) {
-                val url = json.getString("stream_url")
-                if (url.isNotBlank()) return url
-            }
-
-            if (json.has("source")) {
-                val source = json.get("source")
-                if (source is JSONObject && source.has("file")) {
-                    return source.getString("file")
-                } else if (source is String && source.isNotBlank()) {
-                    return source
-                }
-            }
-
-            // Fallback regex search for .m3u8 inside the json string
-            val m3u8Regex = """https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""".toRegex()
-            m3u8Regex.find(jsonString)?.value
-        } catch (e: Throwable) {
-            e.printStackTrace()
-            null
-        }
+        val regex = """"(?:stream_url|stream_url_nop2p)"\s*:\s*"([^"]+)"""".toRegex()
+        return regex.find(jsonString)?.groupValues?.get(1)?.replace("\\/", "/")
     }
 }
