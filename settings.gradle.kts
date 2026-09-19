@@ -1,6 +1,7 @@
 rootProject.name = "DaddyLiveCloudstream"
 
-val disabled = listOf<String>()
+val disabled = listOf<String>("android-app")
+
 
 File(rootDir, ".").eachDir { dir ->
     if (!disabled.contains(dir.name) && File(dir, "build.gradle.kts").exists()) {

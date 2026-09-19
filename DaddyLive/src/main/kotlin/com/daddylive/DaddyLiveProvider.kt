@@ -49,10 +49,11 @@ class DaddyLiveProvider : MainAPI() {
     private val cacheDurationMs = 15 * 60 * 1000L // 15 minutes
 
     override val mainPage = mainPageOf(
-        "liverpool" to "🔴 Liverpool Maç Yayınları",
+        "liverpool" to "🔴 Liverpool FC Azerbaijan Supporters",
         "24-7-channels.php" to "24/7 Channels",
         "" to "Live Sports & Upcoming Events"
     )
+
 
     private suspend fun fetchLiverpoolStreams(): List<LiveSearchResponse> {
         val liverpoolStreams = mutableListOf<LiveSearchResponse>()
