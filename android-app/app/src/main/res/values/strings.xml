@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">LFCAZE TV</string>
+    <string name="match_waiting">Sıradaki Maç Bekleniyor</string>
+    <string name="no_active_match">Şu an aktif canlı maç bulunmamaktadır. Telegram botundan maç eklendiğinde burada anında görünecektir.</string>
+    <string name="live_badge">CANLI</string>
+    <string name="streams_header">Yayın Kanalları</string>
+    <string name="loading_stream">Yayın linki çözülüyor…</string>
+    <string name="error_stream">Yayın açılamadı, lütfen başka bir yayın seçin.</string>
+</resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="lfc_red">#C8102E</color>
+    <color name="lfc_dark_red">#9E0B22</color>
+    <color name="lfc_gold">#F6EB61</color>
+    <color name="bg_dark">#0D0D11</color>
+    <color name="surface_dark">#181820</color>
+    <color name="surface_card">#22222D</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#A0A0B0</color>
+</resources>
