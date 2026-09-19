@@ -1,20 +1,7 @@
 {
-  "active": true,
-  "match": "Liverpool vs losers",
-  "info": "Bugünkü maç yayınları",
-  "poster": "https://upload.wikimedia.org/wikipedia/en/thumb/0/0c/Liverpool_FC.svg/800px-Liverpool_FC.svg.png",
-  "channels": [
-    {
-      "id": "432",
-      "name": "Yayın 1 (Arena Sport 1 Croatia)"
-    },
-    {
-      "id": "572",
-      "name": "Yayın 2 (SuperSport MaXimo 1)"
-    },
-    {
-      "id": "122",
-      "name": "Yayın 3 (Canal+ Sport France)"
-    }
-  ]
+  "active": false,
+  "match": "",
+  "info": "",
+  "poster": "",
+  "channels": []
 }
