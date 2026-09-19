@@ -1,11 +1,27 @@
 package com.daddylive
 
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import org.jsoup.nodes.Document
 import java.net.URI
+
+data class LiverpoolChannel(
+    val id: String? = null,
+    val name: String? = null,
+    val url: String? = null
+)
+
+data class LiverpoolConfig(
+    val active: Boolean = false,
+    val match: String? = null,
+    val info: String? = null,
+    val poster: String? = null,
+    val channels: List<LiverpoolChannel> = emptyList()
+)
 
 class DaddyLiveProvider : MainAPI() {
     override var mainUrl = "https://dlive.sx"
@@ -19,6 +35,13 @@ class DaddyLiveProvider : MainAPI() {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
 
     private val defaultPoster = "https://dlive.sx/assets/logos/logo.png"
+    private val liverpoolPoster =
+        "https://upload.wikimedia.org/wikipedia/en/thumb/0/0c/Liverpool_FC.svg/800px-Liverpool_FC.svg.png"
+    private val remoteLiverpoolConfigUrl =
+        "https://raw.githubusercontent.com/alkhan-de0s/lfcaze-tv/master/liverpool.json"
+
+    private val jsonMapper = jacksonObjectMapper()
+        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     // In-memory cache for channel list
     private var cachedChannels: List<LiveSearchResponse> = emptyList()
@@ -26,9 +49,80 @@ class DaddyLiveProvider : MainAPI() {
     private val cacheDurationMs = 15 * 60 * 1000L // 15 minutes
 
     override val mainPage = mainPageOf(
+        "liverpool" to "🔴 Liverpool Maç Yayınları",
         "24-7-channels.php" to "24/7 Channels",
         "" to "Live Sports & Upcoming Events"
     )
+
+    private suspend fun fetchLiverpoolStreams(): List<LiveSearchResponse> {
+        val liverpoolStreams = mutableListOf<LiveSearchResponse>()
+
+        // 1. Check remote admin configuration from GitHub (updated via Telegram Bot)
+        try {
+            val responseText = app.get(
+                remoteLiverpoolConfigUrl,
+                headers = mapOf("Cache-Control" to "no-cache")
+            ).text
+
+            val config = jsonMapper.readValue(responseText, LiverpoolConfig::class.java)
+            if (config.active && config.channels.isNotEmpty()) {
+                val matchTitle = config.match?.takeIf { it.isNotBlank() } ?: "Liverpool FC"
+                val matchPoster = config.poster?.takeIf { it.isNotBlank() } ?: liverpoolPoster
+
+                for (ch in config.channels) {
+                    val rawId = ch.id?.trim() ?: ""
+                    val directUrl = ch.url?.trim() ?: ""
+                    val targetUrl = when {
+                        directUrl.isNotBlank() -> fixUrl(directUrl)
+                        rawId.startsWith("http") -> rawId
+                        rawId.startsWith("stream-") -> "$mainUrl/watch.php?id=$rawId"
+                        rawId.isNotBlank() -> "$mainUrl/watch.php?id=stream-$rawId"
+                        else -> null
+                    } ?: continue
+
+                    val streamName = "$matchTitle - ${ch.name ?: "Canlı Yayın"}"
+                    liverpoolStreams.add(
+                        newLiveSearchResponse(streamName, targetUrl, TvType.Live) {
+                            this.posterUrl = matchPoster
+                        }
+                    )
+                }
+            }
+        } catch (e: Throwable) {
+            // Ignore failure, fall through to auto-scraper
+        }
+
+        if (liverpoolStreams.isNotEmpty()) {
+            return liverpoolStreams
+        }
+
+        // 2. Fallback: Automatically search upcoming live events for Liverpool/LFC
+        try {
+            val upcoming = fetchUpcomingEvents()
+            val autoLfc = upcoming.filter { event ->
+                val title = event.name.lowercase()
+                title.contains("liverpool") || title.contains(" lfc") || title.startsWith("lfc ")
+            }
+            if (autoLfc.isNotEmpty()) {
+                return autoLfc
+            }
+        } catch (e: Throwable) {
+            // Ignore
+        }
+
+        // 3. Fallback: If no match today, show LFCTV if available in 24/7 channels
+        try {
+            val allChannels = fetchAll247Channels()
+            val lfctv = allChannels.filter { it.name.contains("LFCTV", ignoreCase = true) }
+            if (lfctv.isNotEmpty()) {
+                return lfctv
+            }
+        } catch (e: Throwable) {
+            // Ignore
+        }
+
+        return emptyList()
+    }
 
     private suspend fun fetchAll247Channels(): List<LiveSearchResponse> {
         val now = System.currentTimeMillis()
@@ -72,7 +166,7 @@ class DaddyLiveProvider : MainAPI() {
                 headers = mapOf("User-Agent" to userAgent)
             ).document
 
-            doc.select("a.upcoming-card").mapNotNull { card ->
+            val items = doc.select("a.upcoming-card").mapNotNull { card ->
                 val title = card.selectFirst(".upcoming-card__title")?.text()?.trim()
                     ?: card.selectFirst("img")?.attr("alt")?.trim()
                     ?: card.text().trim()
@@ -87,6 +181,7 @@ class DaddyLiveProvider : MainAPI() {
                     this.posterUrl = poster
                 }
             }
+            items
         } catch (e: Throwable) {
             e.printStackTrace()
             emptyList()
@@ -98,6 +193,7 @@ class DaddyLiveProvider : MainAPI() {
         request: MainPageRequest
     ): HomePageResponse {
         val list = when (request.data) {
+            "liverpool" -> fetchLiverpoolStreams()
             "24-7-channels.php" -> fetchAll247Channels()
             "" -> fetchUpcomingEvents()
             else -> fetchAll247Channels()
@@ -109,6 +205,7 @@ class DaddyLiveProvider : MainAPI() {
             hasNext = false
         )
     }
+
 
     override suspend fun search(query: String): List<SearchResponse> {
         val channels = fetchAll247Channels()

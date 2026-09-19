@@ -50,6 +50,8 @@ jobs:
           find . -name "*.cs3" -exec cp {} /tmp/build_artifacts/ \;
           cp build/plugins.json /tmp/build_artifacts/
           cp repo.json /tmp/build_artifacts/
+          cp liverpool.json /tmp/build_artifacts/
+
 
           git checkout --orphan builds
           git rm -rf .
