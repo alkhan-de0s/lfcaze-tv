@@ -1,5 +1,7 @@
 package com.sinematv
 
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
@@ -15,6 +17,9 @@ class SinemaTvProvider : MainAPI() {
     override var lang = "az"
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
     override var hasMainPage = true
+
+    private val jsonMapper = jacksonObjectMapper()
+        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     override val mainPage = mainPageOf(
         "$mainUrl/film/page/" to "Son Filmlər",
@@ -201,7 +206,12 @@ class SinemaTvProvider : MainAPI() {
     ): Boolean {
         var foundLinks = false
 
-        val payload = tryParseJson<EpisodeDataPayload>(data)
+        val payload = try {
+            jsonMapper.readValue(data, EpisodeDataPayload::class.java)
+        } catch (e: Throwable) {
+            null
+        }
+
         val movieId = payload?.movieId?.ifEmpty { null }
         val episodeId = payload?.episodeId
         val fallbackUrl = payload?.fallbackUrl ?: if (data.startsWith("http")) data else null
@@ -221,7 +231,6 @@ class SinemaTvProvider : MainAPI() {
                     if (!streamUrl.isNullOrEmpty()) {
                         val dubTitle = variant.title?.ifEmpty { null } ?: "Standart"
                         val qualityStr = variant.streamQuality ?: "HD"
-                        val quality = getQualityFromName(qualityStr)
 
                         callback.invoke(
                             ExtractorLink(
@@ -229,7 +238,7 @@ class SinemaTvProvider : MainAPI() {
                                 name = "$name - $dubTitle ($qualityStr)",
                                 url = streamUrl,
                                 referer = "$mainUrl/",
-                                quality = quality,
+                                quality = Qualities.P1080.value,
                                 type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
                             )
                         )
@@ -336,7 +345,11 @@ class SinemaTvProvider : MainAPI() {
             val apiUrl = fixUrl(envBase)
             val responseText = app.get(apiUrl, headers = headers, referer = playerUrl).text
 
-            val apiResponse = tryParseJson<BalancerApiResponse>(responseText)
+            val apiResponse = try {
+                jsonMapper.readValue(responseText, BalancerApiResponse::class.java)
+            } catch (e: Throwable) {
+                null
+            }
             apiResponse?.playlist ?: apiResponse?.data
         } catch (e: Exception) {
             e.printStackTrace()
