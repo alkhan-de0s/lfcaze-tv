@@ -214,9 +214,40 @@ class DaddyLiveProvider : MainAPI() {
 
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val channels = fetchAll247Channels()
         val q = query.trim().lowercase()
-        return channels.filter { it.name.lowercase().contains(q) }
+        if (q.isBlank()) return emptyList()
+
+        val tokens = q.split("""\s+""".toRegex()).filter { it.isNotBlank() }
+        val channels = fetchAll247Channels()
+
+        // Normalize function removing punctuation (e.g. be-in -> bein)
+        fun norm(s: String) = s.lowercase().replace("""[^a-z0-9]""".toRegex(), "")
+        val normQ = norm(q)
+
+        val channelMatches = channels.filter { ch ->
+            val nameLower = ch.name.lowercase()
+            val normName = norm(nameLower)
+            
+            // 1. Direct contains or normalized contains
+            if (nameLower.contains(q) || normName.contains(normQ)) return@filter true
+            
+            // 2. All query tokens present
+            tokens.all { t -> nameLower.contains(t) || normName.contains(norm(t)) }
+        }
+
+        // Also search upcoming live events if query might be a match/team
+        val upcomingMatches = try {
+            val upcoming = fetchUpcomingEvents()
+            upcoming.filter { event ->
+                val nameLower = event.name.lowercase()
+                val normName = norm(nameLower)
+                nameLower.contains(q) || normName.contains(normQ) || tokens.all { t -> nameLower.contains(t) || normName.contains(norm(t)) }
+            }
+        } catch (e: Throwable) {
+            emptyList()
+        }
+
+        return (channelMatches + upcomingMatches).distinctBy { it.url }
     }
 
     override suspend fun load(url: String): LoadResponse {

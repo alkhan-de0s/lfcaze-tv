@@ -181,14 +181,25 @@ async function handleMessage(msg, env) {
   }
 
   // AKILLI ARAMA: Kullanıcı /ara yazsa da yazmasa da kanal arar!
-  const query = text.replace(/^\/ara\s*/i, "").trim().toLowerCase();
+  const query = text.replace(/^\/ara\s*/i, "").trim();
   if (query.length < 2) {
     await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "Aramak için en az 2 harf yazın (örn: \`sky\`, \`tnt\`, \`bein\`).");
     return;
   }
 
+  const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const qLower = query.toLowerCase();
+  const qNorm = norm(query);
+  const tokens = qLower.split(/\s+/).filter(Boolean);
+
   const channels = await getChannelList();
-  const matches = channels.filter(c => c.name.toLowerCase().includes(query)).slice(0, 10);
+  const matches = channels.filter(c => {
+    const nameLower = (c.name || "").toLowerCase();
+    const nameNorm = norm(c.name);
+    if (nameLower.includes(qLower) || nameNorm.includes(qNorm)) return true;
+    if (tokens.length > 1 && tokens.every(t => nameLower.includes(t) || nameNorm.includes(norm(t)))) return true;
+    return false;
+  }).slice(0, 15);
 
   if (matches.length === 0) {
     await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, `❌ *"${query}"* için sonuç bulunamadı. Başka bir kelime deneyin (örn: \`sky\`, \`bein\`, \`premier\`).`);
