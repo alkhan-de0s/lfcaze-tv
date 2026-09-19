@@ -10,7 +10,7 @@ import okhttp3.Request
 object MatchRepository {
 
     private const val CONFIG_URL =
-        "https://raw.githubusercontent.com/alkhan-de0s/xstream-tv/master/liverpool.json"
+        "https://raw.githubusercontent.com/alkhan-de0s/lfcaze-tv/master/liverpool.json"
 
     private val jsonMapper = jacksonObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
