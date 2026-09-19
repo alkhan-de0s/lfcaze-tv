@@ -15,5 +15,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "LFCAZETV"
+rootProject.name = "XStreamTV"
 include(":app")

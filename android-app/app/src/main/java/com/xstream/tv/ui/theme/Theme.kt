@@ -1,4 +1,4 @@
-package com.lfcaze.tv.ui.theme
+package com.xstream.tv.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -6,8 +6,8 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
 private val DarkColorScheme = darkColorScheme(
-    primary = LfcRed,
-    secondary = LfcGold,
+    primary = StreamRed,
+    secondary = StreamGold,
     background = BgDark,
     surface = SurfaceDark,
     onPrimary = TextPrimaryDark,
@@ -17,8 +17,8 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = LfcRed,
-    secondary = LfcGold,
+    primary = StreamRed,
+    secondary = StreamGold,
     background = BgLight,
     surface = SurfaceLight,
     onPrimary = SurfaceLight,
@@ -28,7 +28,7 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun LFCAZETVTheme(
+fun XStreamTVTheme(
     darkTheme: Boolean = true,
     content: @Composable () -> Unit
 ) {

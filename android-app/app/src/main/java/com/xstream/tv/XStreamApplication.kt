@@ -1,13 +1,13 @@
-package com.lfcaze.tv
+package com.xstream.tv
 
 import android.app.Application
 import android.content.Context
 import android.util.Log
-import com.lfcaze.tv.ui.CrashActivity
+import com.xstream.tv.ui.CrashActivity
 import java.io.File
 import kotlin.system.exitProcess
 
-class LfcApplication : Application() {
+class XStreamApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
@@ -16,7 +16,7 @@ class LfcApplication : Application() {
 
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                Log.e("LFCAZE_CRASH", "FATAL CRASH DETECTED ON ${thread.name}", throwable)
+                Log.e("XSTREAM_CRASH", "FATAL CRASH DETECTED ON ${thread.name}", throwable)
 
                 // Save crash report to file
                 try {
@@ -29,7 +29,7 @@ class LfcApplication : Application() {
                     }
                     crashFile.writeText(report)
                 } catch (e: Exception) {
-                    Log.e("LFCAZE_CRASH", "Failed to write crash file", e)
+                    Log.e("XSTREAM_CRASH", "Failed to write crash file", e)
                 }
 
                 // Launch CrashActivity

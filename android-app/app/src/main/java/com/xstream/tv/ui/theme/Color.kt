@@ -1,10 +1,10 @@
-package com.lfcaze.tv.ui.theme
+package com.xstream.tv.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val LfcRed = Color(0xFFE0062C)
+val StreamRed = Color(0xFFE0062C)
 val LfcDarkRed = Color(0xFF8B0000)
-val LfcGold = Color(0xFFF59E0B)
+val StreamGold = Color(0xFFF59E0B)
 val LiveGreen = Color(0xFF10B981)
 
 // Dark Palette

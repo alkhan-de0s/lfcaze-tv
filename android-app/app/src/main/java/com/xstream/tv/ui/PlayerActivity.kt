@@ -1,4 +1,4 @@
-package com.lfcaze.tv.ui
+package com.xstream.tv.ui
 
 import android.content.Context
 import android.content.Intent
@@ -44,13 +44,13 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.ui.PlayerView
-import com.lfcaze.tv.model.ResolvedStream
-import com.lfcaze.tv.network.StreamResolver
-import com.lfcaze.tv.ui.theme.LfcGold
-import com.lfcaze.tv.ui.theme.LfcRed
-import com.lfcaze.tv.ui.theme.SurfaceDark
-import com.lfcaze.tv.ui.theme.TextPrimary
-import com.lfcaze.tv.ui.theme.TextSecondary
+import com.xstream.tv.model.ResolvedStream
+import com.xstream.tv.network.StreamResolver
+import com.xstream.tv.ui.theme.StreamGold
+import com.xstream.tv.ui.theme.StreamRed
+import com.xstream.tv.ui.theme.SurfaceDark
+import com.xstream.tv.ui.theme.TextPrimary
+import com.xstream.tv.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
 
 @UnstableApi
@@ -212,14 +212,14 @@ class PlayerActivity : ComponentActivity() {
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Surface(
-                                    color = LfcRed,
+                                    color = StreamRed,
                                     shape = CircleShape,
                                     modifier = Modifier.size(7.dp)
                                 ) {}
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "$currentChannelName • ${currentServer.serverName}",
-                                    color = LfcGold,
+                                    color = StreamGold,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium
                                 )
@@ -262,7 +262,7 @@ class PlayerActivity : ComponentActivity() {
                 // Buffering Spinner
                 if (isBuffering) {
                     CircularProgressIndicator(
-                        color = LfcRed,
+                        color = StreamRed,
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
@@ -295,7 +295,7 @@ class PlayerActivity : ComponentActivity() {
                                 Icon(
                                     imageVector = Icons.Default.Dns,
                                     contentDescription = null,
-                                    tint = LfcRed,
+                                    tint = StreamRed,
                                     modifier = Modifier.size(22.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
@@ -317,7 +317,7 @@ class PlayerActivity : ComponentActivity() {
                                     Card(
                                         shape = RoundedCornerShape(10.dp),
                                         colors = CardDefaults.cardColors(
-                                            containerColor = if (isSelected) LfcRed.copy(alpha = 0.25f) else Color(0xFF222634)
+                                            containerColor = if (isSelected) StreamRed.copy(alpha = 0.25f) else Color(0xFF222634)
                                         ),
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -336,7 +336,7 @@ class PlayerActivity : ComponentActivity() {
                                             Icon(
                                                 imageVector = Icons.Default.Tv,
                                                 contentDescription = null,
-                                                tint = if (isSelected) LfcRed else TextSecondary,
+                                                tint = if (isSelected) StreamRed else TextSecondary,
                                                 modifier = Modifier.size(20.dp)
                                             )
                                             Spacer(modifier = Modifier.width(12.dp))
@@ -349,7 +349,7 @@ class PlayerActivity : ComponentActivity() {
                                                 )
                                                 Text(
                                                     text = if (idx == 0) "Əsas Server • Tövsiyə olunur" else "Alternativ Ehtiyat Server",
-                                                    color = if (isSelected) LfcGold else TextSecondary,
+                                                    color = if (isSelected) StreamGold else TextSecondary,
                                                     fontSize = 11.sp
                                                 )
                                             }
@@ -357,7 +357,7 @@ class PlayerActivity : ComponentActivity() {
                                                 Icon(
                                                     imageVector = Icons.Default.Check,
                                                     contentDescription = "Seçilib",
-                                                    tint = LfcGold,
+                                                    tint = StreamGold,
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                             }

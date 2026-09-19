@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.lfcaze.tv"
+    namespace = "com.xstream.tv"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.lfcaze.tv"
+        applicationId = "com.xstream.tv"
         minSdk = 24
         targetSdk = 34
         versionCode = 2

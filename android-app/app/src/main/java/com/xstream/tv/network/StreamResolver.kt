@@ -1,7 +1,7 @@
-package com.lfcaze.tv.network
+package com.xstream.tv.network
 
-import com.lfcaze.tv.decoder.DaddyLiveDecoder
-import com.lfcaze.tv.model.ResolvedStream
+import com.xstream.tv.decoder.DaddyLiveDecoder
+import com.xstream.tv.model.ResolvedStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient

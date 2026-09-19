@@ -1,4 +1,4 @@
-package com.lfcaze.tv.decoder
+package com.xstream.tv.decoder
 
 object DaddyLiveDecoder {
 

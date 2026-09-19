@@ -1,4 +1,4 @@
-package com.lfcaze.tv.ui
+package com.xstream.tv.ui
 
 import android.content.Context
 import android.os.Bundle
@@ -35,11 +35,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.lfcaze.tv.model.LiverpoolChannel
-import com.lfcaze.tv.model.LiverpoolConfig
-import com.lfcaze.tv.network.MatchRepository
-import com.lfcaze.tv.network.StreamResolver
-import com.lfcaze.tv.ui.theme.*
+import com.xstream.tv.model.LiverpoolChannel
+import com.xstream.tv.model.LiverpoolConfig
+import com.xstream.tv.network.MatchRepository
+import com.xstream.tv.network.StreamResolver
+import com.xstream.tv.ui.theme.*
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
             val prefs = remember { context.getSharedPreferences("lfc_prefs", Context.MODE_PRIVATE) }
             var isDarkTheme by remember { mutableStateOf(prefs.getBoolean("is_dark_theme", true)) }
 
-            LFCAZETVTheme(darkTheme = isDarkTheme) {
+            XStreamTVTheme(darkTheme = isDarkTheme) {
                 HomeScreen(
                     isDarkTheme = isDarkTheme,
                     onToggleTheme = {
@@ -135,7 +135,7 @@ fun HomeScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = LfcRed,
+                            color = StreamRed,
                             modifier = Modifier.size(36.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
@@ -151,7 +151,7 @@ fun HomeScreen(
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "LFCAZE TV",
+                                    text = "XStream TV",
                                     fontWeight = FontWeight.ExtraBold,
                                     fontSize = 19.sp,
                                     color = textPrimary,
@@ -160,11 +160,11 @@ fun HomeScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
-                                    color = LfcRed.copy(alpha = 0.15f)
+                                    color = StreamRed.copy(alpha = 0.15f)
                                 ) {
                                     Text(
                                         text = "LIVE",
-                                        color = LfcRed,
+                                        color = StreamRed,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Black,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -186,7 +186,7 @@ fun HomeScreen(
                         Icon(
                             imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                             contentDescription = "Mövzunu Dəyiş",
-                            tint = if (isDarkTheme) LfcGold else textPrimary
+                            tint = if (isDarkTheme) StreamGold else textPrimary
                         )
                     }
 
@@ -214,7 +214,7 @@ fun HomeScreen(
             when {
                 isLoading && config == null -> {
                     CircularProgressIndicator(
-                        color = LfcRed,
+                        color = StreamRed,
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
@@ -235,7 +235,7 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { loadData() },
-                            colors = ButtonDefaults.buttonColors(containerColor = LfcRed),
+                            colors = ButtonDefaults.buttonColors(containerColor = StreamRed),
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Text("Yenidən cəhd et", color = Color.White, fontWeight = FontWeight.Bold)
@@ -273,7 +273,7 @@ fun HomeScreen(
                                     Icon(
                                         imageVector = Icons.Default.Dns,
                                         contentDescription = null,
-                                        tint = LfcRed,
+                                        tint = StreamRed,
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -343,7 +343,7 @@ fun HomeScreen(
                             modifier = Modifier.padding(8.dp)
                         ) {
                             CircularProgressIndicator(
-                                color = LfcRed,
+                                color = StreamRed,
                                 modifier = Modifier.size(34.dp)
                             )
                             Spacer(modifier = Modifier.width(16.dp))
@@ -397,7 +397,7 @@ fun MatchBannerCard(
             .fillMaxWidth()
             .border(
                 1.dp,
-                if (isActive) LfcRed.copy(alpha = 0.5f) else cardBorder,
+                if (isActive) StreamRed.copy(alpha = 0.5f) else cardBorder,
                 RoundedCornerShape(16.dp)
             )
     ) {
@@ -431,7 +431,7 @@ fun MatchBannerCard(
                 ) {
                     if (isActive) {
                         Surface(
-                            color = LfcRed.copy(alpha = alpha),
+                            color = StreamRed.copy(alpha = alpha),
                             shape = RoundedCornerShape(6.dp)
                         ) {
                             Text(
@@ -461,7 +461,7 @@ fun MatchBannerCard(
                         Icon(
                             imageVector = Icons.Default.SportsSoccer,
                             contentDescription = null,
-                            tint = LfcRed,
+                            tint = StreamRed,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -523,14 +523,14 @@ fun ChannelItemCard(
         ) {
             Surface(
                 shape = CircleShape,
-                color = LfcRed.copy(alpha = 0.12f),
+                color = StreamRed.copy(alpha = 0.12f),
                 modifier = Modifier.size(42.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = "Oynat",
-                        tint = LfcRed,
+                        tint = StreamRed,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -551,7 +551,7 @@ fun ChannelItemCard(
                 ) {
                     Text(
                         text = "HD 1080p",
-                        color = LfcGold,
+                        color = StreamGold,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -564,7 +564,7 @@ fun ChannelItemCard(
             }
 
             Surface(
-                color = LfcRed,
+                color = StreamRed,
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(
@@ -602,14 +602,14 @@ fun InactiveMatchCard(
         ) {
             Surface(
                 shape = CircleShape,
-                color = LfcRed.copy(alpha = 0.08f),
+                color = StreamRed.copy(alpha = 0.08f),
                 modifier = Modifier.size(56.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.Tv,
                         contentDescription = null,
-                        tint = LfcRed,
+                        tint = StreamRed,
                         modifier = Modifier.size(28.dp)
                     )
                 }

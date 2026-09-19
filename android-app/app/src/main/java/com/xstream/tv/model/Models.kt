@@ -1,4 +1,4 @@
-package com.lfcaze.tv.model
+package com.xstream.tv.model
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 

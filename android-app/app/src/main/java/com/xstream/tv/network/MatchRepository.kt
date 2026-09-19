@@ -1,8 +1,8 @@
-package com.lfcaze.tv.network
+package com.xstream.tv.network
 
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.lfcaze.tv.model.LiverpoolConfig
+import com.xstream.tv.model.LiverpoolConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
@@ -10,7 +10,7 @@ import okhttp3.Request
 object MatchRepository {
 
     private const val CONFIG_URL =
-        "https://raw.githubusercontent.com/alkhan-de0s/lfcaze-tv/master/liverpool.json"
+        "https://raw.githubusercontent.com/alkhan-de0s/xstream-tv/master/liverpool.json"
 
     private val jsonMapper = jacksonObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)

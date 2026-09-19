@@ -1,4 +1,4 @@
-package com.lfcaze.tv.ui
+package com.xstream.tv.ui
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -29,13 +29,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.lfcaze.tv.ui.theme.BgDark
-import com.lfcaze.tv.ui.theme.CardDark
-import com.lfcaze.tv.ui.theme.LFCAZETVTheme
-import com.lfcaze.tv.ui.theme.LfcRed
-import com.lfcaze.tv.ui.theme.SurfaceDark
-import com.lfcaze.tv.ui.theme.TextPrimary
-import com.lfcaze.tv.ui.theme.TextSecondary
+import com.xstream.tv.ui.theme.BgDark
+import com.xstream.tv.ui.theme.CardDark
+import com.xstream.tv.ui.theme.XStreamTVTheme
+import com.xstream.tv.ui.theme.StreamRed
+import com.xstream.tv.ui.theme.SurfaceDark
+import com.xstream.tv.ui.theme.TextPrimary
+import com.xstream.tv.ui.theme.TextSecondary
 
 class CrashActivity : ComponentActivity() {
 
@@ -67,7 +67,7 @@ class CrashActivity : ComponentActivity() {
         }
 
         val fullReport = buildString {
-            appendLine("=== LFCAZE TV QƏZA HESABATI ===")
+            appendLine("=== XStream TV QƏZA HESABATI ===")
             appendLine(deviceInfo)
             appendLine("Xəta: $errorMessage")
             appendLine("--- Stack Trace ---")
@@ -75,7 +75,7 @@ class CrashActivity : ComponentActivity() {
         }
 
         setContent {
-            LFCAZETVTheme {
+            XStreamTVTheme {
                 CrashScreen(
                     deviceInfo = deviceInfo,
                     errorMessage = errorMessage,
@@ -120,7 +120,7 @@ fun CrashScreen(
                     OutlinedButton(
                         onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            val clip = ClipData.newPlainText("LFCAZE TV Crash", fullReport)
+                            val clip = ClipData.newPlainText("XStream TV Crash", fullReport)
                             clipboard.setPrimaryClip(clip)
                             Toast.makeText(context, "Xəta loqu kopyalandı!", Toast.LENGTH_SHORT).show()
                         },
@@ -134,7 +134,7 @@ fun CrashScreen(
 
                     Button(
                         onClick = onRestart,
-                        colors = ButtonDefaults.buttonColors(containerColor = LfcRed),
+                        colors = ButtonDefaults.buttonColors(containerColor = StreamRed),
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp)
                     ) {
@@ -155,7 +155,7 @@ fun CrashScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Surface(
-                color = LfcRed.copy(alpha = 0.15f),
+                color = StreamRed.copy(alpha = 0.15f),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.size(64.dp)
             ) {
@@ -163,7 +163,7 @@ fun CrashScreen(
                     Icon(
                         imageVector = Icons.Default.Warning,
                         contentDescription = null,
-                        tint = LfcRed,
+                        tint = StreamRed,
                         modifier = Modifier.size(36.dp)
                     )
                 }
@@ -225,7 +225,7 @@ fun CrashScreen(
                 Column(modifier = Modifier.padding(14.dp)) {
                     Text(
                         text = "Xəta Detalı",
-                        color = LfcRed,
+                        color = StreamRed,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )

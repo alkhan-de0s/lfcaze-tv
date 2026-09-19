@@ -13,13 +13,13 @@
         android:required="false" />
 
     <application
-        android:name=".LfcApplication"
+        android:name=".XStreamApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@style/Theme.LFCAZETV"
+        android:theme="@style/Theme.XStreamTV"
         android:usesCleartextTraffic="true">
 
         <!-- Main Home Screen Activity -->
@@ -27,7 +27,7 @@
             android:name=".ui.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.LFCAZETV">
+            android:theme="@style/Theme.XStreamTV">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -41,14 +41,14 @@
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
             android:exported="false"
             android:screenOrientation="sensorLandscape"
-            android:theme="@style/Theme.LFCAZETV" />
+            android:theme="@style/Theme.XStreamTV" />
 
         <!-- Independent Crash Reporting Activity -->
         <activity
             android:name=".ui.CrashActivity"
             android:exported="false"
             android:process=":crash"
-            android:theme="@style/Theme.LFCAZETV" />
+            android:theme="@style/Theme.XStreamTV" />
 
     </application>
 
