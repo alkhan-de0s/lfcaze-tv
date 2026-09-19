@@ -3,30 +3,5 @@
   "match": "Liverpool vs losers",
   "info": "Bugünkü maç yayınları",
   "poster": "https://upload.wikimedia.org/wikipedia/en/thumb/0/0c/Liverpool_FC.svg/800px-Liverpool_FC.svg.png",
-  "channels": [
-    {
-      "id": "134",
-      "name": "Yayın 1 (Arena Sport 1 Premium)"
-    },
-    {
-      "id": "135",
-      "name": "Yayın 2 (Arena Sport 2 Premium)"
-    },
-    {
-      "id": "139",
-      "name": "Yayın 3 (Arena Sport 3 Premium)"
-    },
-    {
-      "id": "130",
-      "name": "Yayın 4 (Sky sports Premier League)"
-    },
-    {
-      "id": "62",
-      "name": "Yayın 5 (beIN SPORTS 1 Turkey)"
-    },
-    {
-      "id": "64",
-      "name": "Yayın 6 (beIN SPORTS 3 Turkey)"
-    }
-  ]
+  "channels": []
 }
