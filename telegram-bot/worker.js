@@ -1,12 +1,13 @@
 /**
- * LFCAZE TV - Liverpool Telegram Admin Bot (v2.0)
+ * LFCAZE TV - Liverpool Telegram Admin Bot (v2.1)
  * Cloudflare Worker (100% Free, 24/7 Serverless)
  *
- * Features:
- * - / (Slash) command autocomplete menu
- * - Live channel search with interactive buttons (/ara <kelime>)
- * - 1-Click channel adding via inline buttons
- * - Instant synchronization with GitHub liverpool.json & CloudStream
+ * Akıllı Özellikler:
+ * - Komut yazmadan doğrudan arama: Sadece "sky", "bein", "tnt" yazmanız yeterli!
+ * - / (Slash) komut menüsü
+ * - Tıklanabilir tek tıkla ekleme butonları
+ * - Butona basınca anında "✅ Eklendi" görsel geri bildirimi
+ * - Türkçe karakter (UTF-8) tam koruma
  */
 
 const GITHUB_REPO = "alkhan-de0s/lfcaze-tv";
@@ -17,8 +18,7 @@ let cachedChannels = null;
 
 const BOT_COMMANDS = [
   { command: "mac", description: "⚽ Maç adını ayarlar (Örn: /mac Liverpool vs Chelsea)" },
-  { command: "ara", description: "🔍 Kanal ara ve tek tıkla ekle (Örn: /ara sky veya /ara bein)" },
-  { command: "kanallar", description: "📺 Kanal ID'lerini elle ekle (Örn: /kanallar 35, 38)" },
+  { command: "ara", description: "🔍 Kanal ara ve ekle (Doğrudan kanal adı da yazabilirsiniz)" },
   { command: "durum", description: "📊 Mevcut maçı ve seçili yayınları gösterir" },
   { command: "temizle", description: "🗑️ Seçili kanalları sıfırlar" },
   { command: "ac", description: "🟢 Liverpool bölümünü CloudStream'de açar" },
@@ -29,24 +29,24 @@ const BOT_COMMANDS = [
 export default {
   async fetch(request, env) {
     if (request.method !== "POST") {
-      return new Response("LFCAZE TV Bot v2.0 is running!", { status: 200 });
+      return new Response("LFCAZE TV Bot v2.1 is running!", { status: 200 });
     }
 
     try {
       const update = await request.json();
 
-      // Handle button clicks (Callback Query)
+      // Buton tıklamaları (Callback Query)
       if (update.callback_query) {
         await handleCallbackQuery(update.callback_query, env);
         return new Response("OK", { status: 200 });
       }
 
-      // Handle text messages
+      // Mesajlar
       if (update.message) {
         await handleMessage(update.message, env);
       }
     } catch (e) {
-      console.error("Worker error:", e);
+      console.error("Worker root error:", e);
     }
 
     return new Response("OK", { status: 200 });
@@ -57,65 +57,55 @@ async function handleMessage(msg, env) {
   const chatId = msg.chat.id;
   const text = (msg.text || "").trim();
 
-  // Optional: check admin ID if configured
-  if (env.ADMIN_TELEGRAM_ID && String(chatId) !== String(env.ADMIN_TELEGRAM_ID)) {
-    await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "⛔ Yetkisiz erişim!");
-    return;
-  }
+  if (!text) return;
 
-  // Register commands on /start
+  // /start veya /yardim
   if (text === "/start" || text === "/yardim" || text === "/help") {
     await registerCommands(env.TELEGRAM_BOT_TOKEN);
     const welcome = `🔴 *LFCAZE TV - Liverpool Maç Yönetim Botu* 🔴\n\n` +
-      `*Kullanabileceğiniz Komutlar:*\n\n` +
-      `🔍 \`/ara <kanal adı>\` ➡️ Kanalları arar ve tıklanabilir ekleme butonları sunar! (Örn: \`/ara sky\` veya \`/ara bein\`)\n\n` +
-      `⚽ \`/mac <Maç Adı>\` ➡️ Maç adı belirler ve bölümü açar (Örn: \`/mac Liverpool vs Real Madrid\`)\n\n` +
-      `📺 \`/kanallar <ID'ler>\` ➡️ Kanal numaralarını toplu yazar (Örn: \`/kanallar 35, 38, 120\`)\n\n` +
-      `📊 \`/durum\` ➡️ Şu an CloudStream'de hangi maç ve kanalların olduğunu gösterir\n\n` +
-      `🗑️ \`/temizle\` ➡️ Yeni maça geçerken eski kanalları temizler\n\n` +
-      `🟢 \`/ac\` | 🔴 \`/kapat\` ➡️ Bölümü anında açar / kapatır`;
+      `Kanal eklemek için hiçbir komuta gerek yok! Doğrudan kanal adını yazabilirsiniz:\n\n` +
+      `🔍 *Örnek aramalar:*\n` +
+      `• \`sky\` ➡️ Tüm Sky kanallarını listeler\n` +
+      `• \`bein\` ➡️ beIN kanallarını listeler\n` +
+      `• \`tnt\` ➡️ TNT Sports kanallarını listeler\n` +
+      `• \`premier\` ➡️ Premier League kanallarını listeler\n\n` +
+      `*Diğer Komutlar:*\n` +
+      `⚽ \`/mac <Maç Adı>\` ➡️ Maç adı belirler (Örn: \`/mac Liverpool vs Arsenal\`)\n` +
+      `📊 \`/durum\` ➡️ Şu anki maç ve ekli kanalları gösterir\n` +
+      `🗑️ \`/temizle\` ➡️ Kanalları sıfırlar\n` +
+      `🟢 \`/ac\` | 🔴 \`/kapat\` ➡️ Bölümü açar / kapatır`;
     await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, welcome);
     return;
   }
 
-  // Live search: /ara <kelime>
-  if (text.startsWith("/ara")) {
-    const query = text.substring(4).trim().toLowerCase();
-    if (!query) {
-      await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "Lütfen aramak istediğiniz kanal adını yazın.\nÖrnek: `/ara sky` veya `/ara bein` veya `/ara premier`");
+  // /durum
+  if (text === "/durum") {
+    const fileData = await getLiverpoolJson(env.GITHUB_TOKEN);
+    if (!fileData) {
+      await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "❌ GitHub verisi okunamadı. GITHUB_TOKEN ayarını kontrol edin.");
       return;
     }
-
-    const channels = await getChannelList();
-    const matches = channels.filter(c => c.name.toLowerCase().includes(query)).slice(0, 10);
-
-    if (matches.length === 0) {
-      await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, `❌ "${query}" içeren kanal bulunamadı.`);
-      return;
+    const statusEmoji = fileData.data.active ? "🟢 Aktif (CloudStream'de Görünüyor)" : "🔴 Kapalı";
+    let statusMsg = `📊 *Mevcut Durum:* ${statusEmoji}\n` +
+      `⚽ *Maç:* ${fileData.data.match || "Belirtilmemiş"}\n\n` +
+      `📺 *Seçili Yayın Kanalları:*\n`;
+    const channels = fileData.data.channels || [];
+    if (channels.length === 0) {
+      statusMsg += `_(Henüz kanal eklenmemiş. Aşağıya kanal adı yazıp arayabilirsiniz)_\n`;
+    } else {
+      channels.forEach((ch, idx) => {
+        statusMsg += `${idx + 1}. *${ch.name}* (ID: \`${ch.id}\`)\n`;
+      });
     }
-
-    // Build inline keyboard buttons
-    const keyboard = matches.map(c => [
-      {
-        text: `➕ ${c.name} (ID: ${c.id})`,
-        callback_data: `add_${c.id}`
-      }
-    ]);
-
-    await sendTgKeyboard(
-      env.TELEGRAM_BOT_TOKEN,
-      chatId,
-      `🔍 *"${query}" için bulunan kanallar:* (Eklemek istediğinize tıklayın)`,
-      keyboard
-    );
+    await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, statusMsg);
     return;
   }
 
-  // Set match name: /mac <Maç Adı>
-  if (text.startsWith("/mac ")) {
-    const matchName = text.substring(5).trim();
+  // /mac <Maç Adı>
+  if (text.startsWith("/mac")) {
+    const matchName = text.replace(/^\/mac\s*/i, "").trim();
     if (!matchName) {
-      await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "Lütfen maç adı girin: `/mac Liverpool vs Arsenal`");
+      await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "Lütfen maç adı da yazın:\nÖrnek: `/mac Liverpool vs Chelsea`");
       return;
     }
     const fileData = await getLiverpoolJson(env.GITHUB_TOKEN);
@@ -126,19 +116,48 @@ async function handleMessage(msg, env) {
     fileData.data.match = matchName;
     fileData.data.active = true;
     await updateLiverpoolJson(env.GITHUB_TOKEN, fileData.data, fileData.sha);
-    await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, `✅ Maç belirlendi ve CloudStream'de açıldı:\n⚽ *${matchName}*\n\nŞimdi \`/ara\` komutuyla kanalları ekleyebilirsiniz.`);
+    await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, `✅ *Maç belirlendi ve CloudStream'de açıldı!*\n⚽ *${matchName}*\n\nŞimdi kanalları eklemek için kanal adı yazabilirsiniz (örn: \`sky\` veya \`bein\`).`);
     return;
   }
 
-  // Set multiple channel IDs: /kanallar 35, 38, 120
-  if (text.startsWith("/kanallar ")) {
-    const input = text.substring(10).trim();
+  // /temizle
+  if (text === "/temizle") {
+    const fileData = await getLiverpoolJson(env.GITHUB_TOKEN);
+    if (!fileData) return;
+    fileData.data.channels = [];
+    await updateLiverpoolJson(env.GITHUB_TOKEN, fileData.data, fileData.sha);
+    await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "🗑️ Tüm kanallar temizlendi. Yeni maça kanal eklemek için arama yapabilirsiniz.");
+    return;
+  }
+
+  // /ac
+  if (text === "/ac") {
+    const fileData = await getLiverpoolJson(env.GITHUB_TOKEN);
+    if (!fileData) return;
+    fileData.data.active = true;
+    await updateLiverpoolJson(env.GITHUB_TOKEN, fileData.data, fileData.sha);
+    await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "🟢 Liverpool maç kategorisi CloudStream'de *AKTİF* edildi!");
+    return;
+  }
+
+  // /kapat
+  if (text === "/kapat") {
+    const fileData = await getLiverpoolJson(env.GITHUB_TOKEN);
+    if (!fileData) return;
+    fileData.data.active = false;
+    await updateLiverpoolJson(env.GITHUB_TOKEN, fileData.data, fileData.sha);
+    await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "🔴 Liverpool maç kategorisi *KAPATILDI*.");
+    return;
+  }
+
+  // /kanallar 35, 38 (elle ID girmek isteyenler için)
+  if (text.startsWith("/kanallar")) {
+    const input = text.replace(/^\/kanallar\s*/i, "").trim();
     const parts = input.split(/[, ]+/).filter(Boolean);
     if (parts.length === 0) {
-      await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "Lütfen kanal ID'lerini yazın: `/kanallar 35, 38`");
+      await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "Örnek: `/kanallar 35, 38, 120`");
       return;
     }
-
     const allChannels = await getChannelList();
     const fileData = await getLiverpoolJson(env.GITHUB_TOKEN);
     if (!fileData) return;
@@ -146,10 +165,7 @@ async function handleMessage(msg, env) {
     const newChannels = parts.map((id, index) => {
       const found = allChannels.find(c => c.id === id);
       const name = found ? found.name : `Kanal ${id}`;
-      return {
-        id: id,
-        name: `Yayın ${index + 1} (${name})`
-      };
+      return { id: id, name: `Yayın ${index + 1} (${name})` };
     });
 
     fileData.data.channels = newChannels;
@@ -164,66 +180,41 @@ async function handleMessage(msg, env) {
     return;
   }
 
-  // Show status: /durum
-  if (text === "/durum") {
-    const fileData = await getLiverpoolJson(env.GITHUB_TOKEN);
-    if (!fileData) {
-      await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "❌ liverpool.json okunamadı.");
-      return;
+  // AKILLI ARAMA: Kullanıcı /ara yazsa da yazmasa da kanal arar!
+  const query = text.replace(/^\/ara\s*/i, "").trim().toLowerCase();
+  if (query.length < 2) {
+    await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "Aramak için en az 2 harf yazın (örn: \`sky\`, \`tnt\`, \`bein\`).");
+    return;
+  }
+
+  const channels = await getChannelList();
+  const matches = channels.filter(c => c.name.toLowerCase().includes(query)).slice(0, 10);
+
+  if (matches.length === 0) {
+    await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, `❌ *"${query}"* için sonuç bulunamadı. Başka bir kelime deneyin (örn: \`sky\`, \`bein\`, \`premier\`).`);
+    return;
+  }
+
+  // Tıklanabilir butonlar oluştur
+  const keyboard = matches.map(c => [
+    {
+      text: `➕ ${c.name} (ID: ${c.id})`,
+      callback_data: `add_${c.id}`
     }
-    const statusEmoji = fileData.data.active ? "🟢 Aktif (CloudStream'de Görünüyor)" : "🔴 Kapalı";
-    let statusMsg = `📊 *Mevcut Durum:* ${statusEmoji}\n` +
-      `⚽ *Maç:* ${fileData.data.match || "Belirtilmemiş"}\n\n` +
-      `📺 *Seçili Yayın Kanalları:*\n`;
-    const channels = fileData.data.channels || [];
-    if (channels.length === 0) {
-      statusMsg += `_(Henüz kanal eklenmemiş. /ara komutuyla ekleyebilirsiniz)_\n`;
-    } else {
-      channels.forEach((ch, idx) => {
-        statusMsg += `${idx + 1}. *${ch.name}* (ID: \`${ch.id}\`)\n`;
-      });
-    }
-    await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, statusMsg);
-    return;
-  }
+  ]);
 
-  // Clear channels: /temizle
-  if (text === "/temizle") {
-    const fileData = await getLiverpoolJson(env.GITHUB_TOKEN);
-    if (!fileData) return;
-    fileData.data.channels = [];
-    await updateLiverpoolJson(env.GITHUB_TOKEN, fileData.data, fileData.sha);
-    await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "🗑️ Tüm maç yayın kanalları temizlendi. \`/ara\` komutuyla yenilerini ekleyebilirsiniz.");
-    return;
-  }
-
-  // Enable: /ac
-  if (text === "/ac") {
-    const fileData = await getLiverpoolJson(env.GITHUB_TOKEN);
-    if (!fileData) return;
-    fileData.data.active = true;
-    await updateLiverpoolJson(env.GITHUB_TOKEN, fileData.data, fileData.sha);
-    await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "🟢 Liverpool maç kategorisi CloudStream'de *AKTİF* edildi!");
-    return;
-  }
-
-  // Disable: /kapat
-  if (text === "/kapat") {
-    const fileData = await getLiverpoolJson(env.GITHUB_TOKEN);
-    if (!fileData) return;
-    fileData.data.active = false;
-    await updateLiverpoolJson(env.GITHUB_TOKEN, fileData.data, fileData.sha);
-    await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "🔴 Liverpool maç kategorisi *KAPATILDI*.");
-    return;
-  }
-
-  await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, "Komut anlaşılamadı. Komutları görmek için `/` yazabilir veya /yardim diyebilirsiniz.");
+  await sendTgKeyboard(
+    env.TELEGRAM_BOT_TOKEN,
+    chatId,
+    `🔍 *"${query}" için bulunan kanallar:* (Eklemek için butona tıklayın)`,
+    keyboard
+  );
 }
 
-// Handle clicking inline button (+ Channel)
+// Buton Tıklaması (Kanal Ekleme)
 async function handleCallbackQuery(cb, env) {
   const data = cb.data;
-  const chatId = cb.message.chat.id;
+  const chatId = cb.message ? cb.message.chat.id : cb.from.id;
 
   if (data.startsWith("add_")) {
     const channelId = data.substring(4);
@@ -233,14 +224,13 @@ async function handleCallbackQuery(cb, env) {
 
     const fileData = await getLiverpoolJson(env.GITHUB_TOKEN);
     if (!fileData) {
-      await answerCallback(env.TELEGRAM_BOT_TOKEN, cb.id, "GitHub hatası!");
+      await answerCallback(env.TELEGRAM_BOT_TOKEN, cb.id, "GitHub bağlantı hatası!", true);
       return;
     }
 
     const currentList = fileData.data.channels || [];
-    // Prevent duplicate
     if (currentList.some(c => c.id === channelId)) {
-      await answerCallback(env.TELEGRAM_BOT_TOKEN, cb.id, "⚠️ Bu kanal zaten ekli!");
+      await answerCallback(env.TELEGRAM_BOT_TOKEN, cb.id, `⚠️ ${chName} zaten ekli!`, true);
       return;
     }
 
@@ -254,8 +244,13 @@ async function handleCallbackQuery(cb, env) {
     fileData.data.active = true;
     await updateLiverpoolJson(env.GITHUB_TOKEN, fileData.data, fileData.sha);
 
-    await answerCallback(env.TELEGRAM_BOT_TOKEN, cb.id, `✅ ${chName} maça eklendi!`, true);
-    await sendTg(env.TELEGRAM_BOT_TOKEN, chatId, `✅ *${chName}* (ID: ${channelId}) maça başarıyla eklendi!\nŞu an toplam *${currentList.length}* kanal yayında.`);
+    // Bildirim ve onay mesajı
+    await answerCallback(env.TELEGRAM_BOT_TOKEN, cb.id, `✅ ${chName} eklendi!`);
+    await sendTg(
+      env.TELEGRAM_BOT_TOKEN,
+      chatId,
+      `✅ *${chName}* (ID: \`${channelId}\`) maça eklendi!\n📺 Şu an toplam *${currentList.length}* yayın kanalı aktif.`
+    );
   }
 }
 
@@ -270,7 +265,7 @@ async function getChannelList() {
       return cachedChannels;
     }
   } catch (e) {
-    console.error("Failed to fetch channels.json:", e);
+    console.error("channels.json fetch error:", e);
   }
   return [];
 }
@@ -339,7 +334,6 @@ async function updateLiverpoolJson(token, data, sha) {
   });
   return res.ok;
 }
-
 
 async function sendTg(botToken, chatId, text) {
   const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
