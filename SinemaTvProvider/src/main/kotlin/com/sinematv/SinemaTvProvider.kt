@@ -1,5 +1,6 @@
 package com.sinematv
 
+import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.lagradost.cloudstream3.*
@@ -26,8 +27,7 @@ class SinemaTvProvider : MainAPI() {
         "$mainUrl/xarici-filmler/" to "Xarici Filmlər (Azərbaycanca)",
         "$mainUrl/turkce-filmler/" to "Türkcə Filmlər",
         "$mainUrl/hind-filmleri/" to "Hind Filmləri",
-        "$mainUrl/mult/" to "Cizgi Filmləri",
-        "$mainUrl/retro-filmler/" to "Köhnə Filmlər"
+        "$mainUrl/mult/" to "Cizgi Filmləri"
     )
 
     override suspend fun getMainPage(
@@ -38,7 +38,9 @@ class SinemaTvProvider : MainAPI() {
         val url = if (page <= 1) "$base/" else "$base/page/$page/"
         val document = app.get(url).document
 
-        val home = document.select("a.poster-item, .poster-item, .grid-item").mapNotNull {
+        // Parse from #dle-content to target actual category items and ignore header carousel
+        val container = document.selectFirst("#dle-content") ?: document
+        val home = container.select("a.poster-item, .poster-item, .grid-item, .poster").mapNotNull {
             it.toSearchResult()
         }.distinctBy { it.url }
 
@@ -92,7 +94,8 @@ class SinemaTvProvider : MainAPI() {
             )
         ).document
 
-        return document.select("a.poster-item, .poster-item, .grid-item").mapNotNull {
+        val container = document.selectFirst("#dle-content") ?: document
+        return container.select("a.poster-item, .poster-item, .grid-item, .poster").mapNotNull {
             it.toSearchResult()
         }.distinctBy { it.url }
     }
@@ -276,42 +279,7 @@ class SinemaTvProvider : MainAPI() {
                 for (iframeUrl in iframes) {
                     if (iframeUrl.contains("vv-player.php")) continue
 
-                    // Check cdn1.sinematv.az / abyss players
-                    if (iframeUrl.contains("cdn1.sinematv.az") || iframeUrl.contains("abyss.to")) {
-                        try {
-                            val cdnHtml = app.get(
-                                iframeUrl,
-                                headers = mapOf("Referer" to fallbackUrl)
-                            ).text
-
-                            val datasMatch = Regex("""const datas = "([^"]+)"""").find(cdnHtml)
-                            if (datasMatch != null) {
-                                val b64 = datasMatch.groupValues[1]
-                                val decodedJson = String(android.util.Base64.decode(b64, android.util.Base64.DEFAULT))
-                                
-                                val m3u8Regex = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""")
-                                val directM3u8 = m3u8Regex.find(decodedJson)?.value
-
-                                if (directM3u8 != null) {
-                                    callback.invoke(
-                                        ExtractorLink(
-                                            source = name,
-                                            name = "$name - CDN1 (Full HD)",
-                                            url = directM3u8,
-                                            referer = iframeUrl,
-                                            quality = Qualities.P1080.value,
-                                            type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
-                                        )
-                                    )
-                                    foundLinks = true
-                                }
-                            }
-                        } catch (e: Throwable) {
-                            e.printStackTrace()
-                        }
-                    }
-
-                    // Standard extractor loader
+                    // Standard extractor loader for third party embeds
                     loadExtractor(
                         url = iframeUrl,
                         referer = "$mainUrl/",
@@ -352,21 +320,28 @@ class SinemaTvProvider : MainAPI() {
                 "Referer" to playerUrl,
                 "Origin" to mainUrl,
                 "Accept" to "application/json, text/plain, */*",
-                "Cache-Control" to "no-cache",
-                "Pragma" to "no-cache"
+                "INT-LANG" to "PHP",
+                "INT-LANG-VERSION" to "8.4.25",
+                "INT-TYPE" to "DLE",
+                "INT-VERSION" to "17.0",
+                "INT-MODULE-VERSION" to "2.4.20"
             )
             if (!token.isNullOrEmpty()) headers["DLE-API-TOKEN"] = token
             if (!reqId.isNullOrEmpty()) headers["Iframe-Request-Id"] = reqId
 
-            val apiUrl = fixUrl(envBase)
+            val apiUrl = "$mainUrl$envBase/catalog-api/episodes?content-id=$movieId"
             val responseText = app.get(apiUrl, headers = headers, referer = playerUrl).text
 
-            val apiResponse = try {
-                jsonMapper.readValue(responseText, BalancerApiResponse::class.java)
+            try {
+                jsonMapper.readValue(responseText, object : TypeReference<List<EpisodeDto>>() {})
             } catch (e: Throwable) {
-                null
+                try {
+                    val apiResponse = jsonMapper.readValue(responseText, BalancerApiResponse::class.java)
+                    apiResponse?.playlist ?: apiResponse?.data
+                } catch (e2: Throwable) {
+                    null
+                }
             }
-            apiResponse?.playlist ?: apiResponse?.data
         } catch (e: Exception) {
             e.printStackTrace()
             null

@@ -1,4 +1,4 @@
-version = 3
+version = 4
 
 cloudstream {
     description = "SinemaTV.az üçün Cloudstream 3 provayderi. Film və serialları yüksək keyfiyyətdə (Full HD / M3U8) izləmək üçün."
