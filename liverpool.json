@@ -1,19 +1,19 @@
 {
   "active": true,
-  "match": "Liverpool FC - Canlı Maç Yayını",
-  "info": "Bugünkü maç yayınları",
+  "match": "Liverpool FC - CanlÄ± MaÃ§ YayÄ±nÄ±",
+  "info": "BugÃ¼nkÃ¼ maÃ§ yayÄ±nlarÄ±",
   "poster": "https://upload.wikimedia.org/wikipedia/en/thumb/0/0c/Liverpool_FC.svg/800px-Liverpool_FC.svg.png",
   "channels": [
     {
-      "name": "Yayın 1 - Sky Sports Premier League",
+      "name": "YayÄ±n 1 - Sky Sports Premier League",
       "id": "51"
     },
     {
-      "name": "Yayın 2 - TNT Sports 1",
+      "name": "YayÄ±n 2 - TNT Sports 1",
       "id": "84"
     },
     {
-      "name": "Yayın 3 - beIN Sports 1",
+      "name": "YayÄ±n 3 - beIN Sports 1",
       "id": "120"
     }
   ]
