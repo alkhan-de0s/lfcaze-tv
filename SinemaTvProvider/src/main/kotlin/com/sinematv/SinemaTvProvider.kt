@@ -23,80 +23,73 @@ class SinemaTvProvider : MainAPI() {
         "$mainUrl/turkce-filmler/page/" to "Türkcə Filmlər",
         "$mainUrl/hind-filmleri/page/" to "Hind Filmləri",
         "$mainUrl/mult/page/" to "Cizgi Filmləri",
-        "$mainUrl/anime/page/" to "Anime",
-        "$mainUrl/new-items/page/" to "Yenilər"
+        "$mainUrl/retro-filmler/page/" to "Köhnə Filmlər"
     )
 
-    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = if (page <= 1) {
-            request.data.removeSuffix("/page/") + "/"
-        } else {
-            "${request.data}$page/"
+    override suspend fun getMainPage(
+        page: Int,
+        request: MainPageRequest
+    ): HomePageResponse {
+        val url = "${request.data}$page/"
+        val document = app.get(url).document
+
+        val home = document.select(".poster.grid-item, .custom-poster").mapNotNull {
+            it.toSearchResult()
         }
 
-        val document = app.get(url).document
-        val elements = document.select("#dle-content a.poster-item")
-            .ifEmpty { document.select("a.poster-item") }
+        return newHomePageResponse(
+            list = HomePageList(
+                name = request.name,
+                list = home,
+                isHorizontalImages = false
+            ),
+            hasNext = home.isNotEmpty()
+        )
+    }
 
-        val items = elements.mapNotNull { it.toSearchResponse() }
-        return newHomePageResponse(request.name, items, hasNext = items.isNotEmpty())
+    private fun Element.toSearchResult(): SearchResponse? {
+        val titleElement = selectFirst(".poster__title, .custom-poster__title") ?: return null
+        val title = titleElement.text().trim()
+        val href = fixUrl(selectFirst("a")?.attr("href") ?: return null)
+        val posterUrl = fixUrlNull(selectFirst("img")?.let {
+            it.attr("data-src").ifEmpty { it.attr("src") }
+        })
+
+        return newMovieSearchResponse(title, href, TvType.Movie) {
+            this.posterUrl = posterUrl
+        }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val searchUrl = "$mainUrl/?do=search&subaction=search&story=$query"
-        val document = app.get(searchUrl).document
-        val elements = document.select("#dle-content a.poster-item")
-            .ifEmpty { document.select("a.poster-item") }
+        val searchUrl = "$mainUrl/index.php?do=search"
+        val document = app.post(
+            searchUrl,
+            data = mapOf(
+                "do" to "search",
+                "subaction" to "search",
+                "story" to query
+            )
+        ).document
 
-        return elements.mapNotNull { it.toSearchResponse() }
-    }
-
-    private fun Element.toSearchResponse(): SearchResponse? {
-        val title = selectFirst(".poster-item__title")?.text()?.trim()
-            ?: attr("title").trim().ifEmpty { null }
-            ?: return null
-
-        val rawHref = attr("href").trim()
-        if (rawHref.isEmpty()) return null
-        val href = fixUrl(rawHref)
-
-        val imgElem = selectFirst(".poster-item__img img")
-        val rawPoster = imgElem?.let {
-            it.attr("data-src").ifEmpty { it.attr("src") }
-        }
-        val posterUrl = fixUrlNull(rawPoster)
-        val isTvSeries = href.contains("/serial/")
-
-        return if (isTvSeries) {
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
-                this.posterUrl = posterUrl
-            }
-        } else {
-            newMovieSearchResponse(title, href, TvType.Movie) {
-                this.posterUrl = posterUrl
-            }
+        return document.select(".poster.grid-item, .custom-poster").mapNotNull {
+            it.toSearchResult()
         }
     }
 
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
 
-        val title = document.selectFirst("h1")?.text()?.trim()
-            ?: document.selectFirst("meta[property=og:title]")?.attr("content")?.trim()
-            ?: "SinemaTV"
-
-        val rawPoster = document.selectFirst(".page__poster img")?.let {
-            it.attr("src").ifEmpty { it.attr("data-src") }
-        } ?: document.selectFirst("meta[property=og:image]")?.attr("content")
-        val posterUrl = fixUrlNull(rawPoster)
-
-        val year = document.selectFirst(".page__year")?.text()?.trim()?.toIntOrNull()
-        val plot = document.selectFirst(".page__text.full-text, .pmovie__text")?.text()?.trim()
-        val genres = document.selectFirst(".page__meta-item--genres")?.text()
-            ?.split(",")
-            ?.mapNotNull { it.trim().ifEmpty { null } }
-
-        val actors = document.selectFirst(".page__info-subinfo")?.text()
+        val title = document.selectFirst(".page__title, h1")?.text()?.trim() ?: "Adsız Film"
+        val posterUrl = fixUrlNull(document.selectFirst(".page__poster img")?.let {
+            it.attr("data-src").ifEmpty { it.attr("src") }
+        })
+        val year = document.selectFirst(".page__meta-item--year, a[href*='/year/']")?.text()
+            ?.filter { it.isDigit() }
+            ?.toIntOrNull()
+        val plot = document.selectFirst(".page__text, #fdesc")?.text()?.trim()
+        val genres = document.select("a[href*='/genre/']").map { it.text().trim() }
+        val actors = document.selectFirst(".page__meta-item:contains(В ролях:), .page__meta-item:contains(Rollarda:)")?.text()
+            ?.substringAfter("Rollarda:")
             ?.substringAfter("В ролях:")
             ?.split(",")
             ?.mapNotNull { it.trim().ifEmpty { null } }
@@ -246,7 +239,7 @@ class SinemaTvProvider : MainAPI() {
             }
         }
 
-        // 2. If fallback URL is present, inspect third-party players/iframes
+        // 2. If fallback URL is present, inspect external players & CDN iframes
         if (fallbackUrl != null) {
             try {
                 val doc = app.get(fallbackUrl).document
@@ -258,6 +251,42 @@ class SinemaTvProvider : MainAPI() {
                 for (iframeUrl in iframes) {
                     if (iframeUrl.contains("vv-player.php")) continue
 
+                    // Check cdn1.sinematv.az / abyss players
+                    if (iframeUrl.contains("cdn1.sinematv.az") || iframeUrl.contains("abyss.to")) {
+                        try {
+                            val cdnHtml = app.get(
+                                iframeUrl,
+                                headers = mapOf("Referer" to fallbackUrl)
+                            ).text
+
+                            val datasMatch = Regex("""const datas = "([^"]+)"""").find(cdnHtml)
+                            if (datasMatch != null) {
+                                val b64 = datasMatch.groupValues[1]
+                                val decodedJson = String(android.util.Base64.decode(b64, android.util.Base64.DEFAULT))
+                                
+                                val m3u8Regex = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""")
+                                val directM3u8 = m3u8Regex.find(decodedJson)?.value
+
+                                if (directM3u8 != null) {
+                                    callback.invoke(
+                                        ExtractorLink(
+                                            source = name,
+                                            name = "$name - CDN1 (Full HD)",
+                                            url = directM3u8,
+                                            referer = iframeUrl,
+                                            quality = Qualities.P1080.value,
+                                            type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
+                                        )
+                                    )
+                                    foundLinks = true
+                                }
+                            }
+                        } catch (e: Throwable) {
+                            e.printStackTrace()
+                        }
+                    }
+
+                    // Standard extractor loader
                     loadExtractor(
                         url = iframeUrl,
                         referer = "$mainUrl/",
@@ -298,34 +327,20 @@ class SinemaTvProvider : MainAPI() {
                 "Referer" to playerUrl,
                 "Origin" to mainUrl,
                 "Accept" to "application/json, text/plain, */*",
-                "INT-LANG" to "PHP",
-                "INT-LANG-VERSION" to "8.4.25",
-                "INT-TYPE" to "DLE",
-                "INT-VERSION" to "17.0",
-                "INT-MODULE-VERSION" to "2.4.20"
+                "Cache-Control" to "no-cache",
+                "Pragma" to "no-cache"
             )
-
             if (!token.isNullOrEmpty()) headers["DLE-API-TOKEN"] = token
             if (!reqId.isNullOrEmpty()) headers["Iframe-Request-Id"] = reqId
 
-            val apiUrl = "$mainUrl$envBase/catalog-api/episodes?content-id=$movieId"
-            val episodesJson = app.get(apiUrl, headers = headers).text
+            val apiUrl = fixUrl(envBase)
+            val responseText = app.get(apiUrl, headers = headers, referer = playerUrl).text
 
-            tryParseJson<List<EpisodeDto>>(episodesJson)
+            val apiResponse = tryParseJson<BalancerApiResponse>(responseText)
+            apiResponse?.playlist ?: apiResponse?.data
         } catch (e: Exception) {
             e.printStackTrace()
             null
-        }
-    }
-
-    private fun getQualityFromName(quality: String?): Int {
-        return when (quality?.uppercase()) {
-            "4K", "2160P", "UHD" -> Qualities.P2160.value
-            "1080P", "FHD", "BDRIP" -> Qualities.P1080.value
-            "720P", "HD", "WEBRIP" -> Qualities.P720.value
-            "480P", "SD" -> Qualities.P480.value
-            "360P" -> Qualities.P360.value
-            else -> Qualities.P1080.value
         }
     }
 }
