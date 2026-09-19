@@ -251,12 +251,18 @@ class DaddyLiveProvider : MainAPI() {
         val channelId = channelIdMatch?.groupValues?.get(1) ?: return false
 
         // Folders supported by DaddyLive player architecture
-        val playerFolders = listOf("stream", "cast", "watch", "player", "plus", "casting")
+        val playerServers = listOf(
+            "stream" to "Player 1 (Əsas)",
+            "cast" to "Player 2 (Cast)",
+            "watch" to "Player 3 (Watch)",
+            "plus" to "Player 4 (Plus)",
+            "casting" to "Player 5 (Casting)",
+            "player" to "Player 6 (Player)"
+        )
 
-        var iframeUrl: String? = null
-        var lastStreamPageUrl: String? = null
+        var foundAny = false
 
-        for (folder in playerFolders) {
+        for ((folder, playerLabel) in playerServers) {
             val streamPageUrl = "$mainUrl/$folder/stream-$channelId.php"
             try {
                 val streamDoc: Document = app.get(
@@ -268,57 +274,52 @@ class DaddyLiveProvider : MainAPI() {
                 ).document
 
                 val frameSrc = streamDoc.select("iframe#thatframe, iframe[src*='/e/'], iframe").attr("src").trim()
-                if (frameSrc.isNotBlank() && !frameSrc.contains("about:blank")) {
-                    iframeUrl = when {
-                        frameSrc.startsWith("//") -> "https:$frameSrc"
-                        frameSrc.startsWith("http") -> frameSrc
-                        else -> "$mainUrl/$frameSrc"
-                    }
-                    lastStreamPageUrl = streamPageUrl
-                    break
+                if (frameSrc.isBlank() || frameSrc.contains("about:blank")) continue
+
+                val embedUrl = when {
+                    frameSrc.startsWith("//") -> "https:$frameSrc"
+                    frameSrc.startsWith("http") -> frameSrc
+                    else -> "$mainUrl/$frameSrc"
                 }
+
+                val embedUri = URI(embedUrl)
+                val embedHost = "${embedUri.scheme}://${embedUri.host}"
+
+                val embedHtml = app.get(
+                    embedUrl,
+                    headers = mapOf(
+                        "Referer" to streamPageUrl,
+                        "User-Agent" to userAgent
+                    )
+                ).text
+
+                val econfigRegex = """window\._econfig\s*=\s*'([^']+)'""".toRegex()
+                val econfig = econfigRegex.find(embedHtml)?.groupValues?.get(1) ?: continue
+
+                val decodedJson = DaddyLiveDecoder.decodeEConfig(econfig) ?: continue
+                val streamUrl = DaddyLiveDecoder.extractStreamUrl(decodedJson) ?: continue
+
+                callback.invoke(
+                    ExtractorLink(
+                        source = this.name,
+                        name = "DaddyLive - $playerLabel",
+                        url = streamUrl,
+                        referer = "$embedHost/",
+                        quality = Qualities.Unknown.value,
+                        type = ExtractorLinkType.M3U8,
+                        headers = mapOf(
+                            "Referer" to "$embedHost/",
+                            "Origin" to embedHost,
+                            "User-Agent" to userAgent
+                        )
+                    )
+                )
+                foundAny = true
             } catch (err: Throwable) {
                 continue
             }
         }
 
-        val embedUrl = iframeUrl ?: return false
-        val streamPageReferer = lastStreamPageUrl ?: "$mainUrl/stream/stream-$channelId.php"
-
-        // Parse embed host for proper Origin and Referer headers
-        val embedUri = URI(embedUrl)
-        val embedHost = "${embedUri.scheme}://${embedUri.host}"
-
-        val embedHtml = app.get(
-            embedUrl,
-            headers = mapOf(
-                "Referer" to streamPageReferer,
-                "User-Agent" to userAgent
-            )
-        ).text
-
-        val econfigRegex = """window\._econfig\s*=\s*'([^']+)'""".toRegex()
-        val econfig = econfigRegex.find(embedHtml)?.groupValues?.get(1) ?: return false
-
-        val decodedJson = DaddyLiveDecoder.decodeEConfig(econfig) ?: return false
-        val streamUrl = DaddyLiveDecoder.extractStreamUrl(decodedJson) ?: return false
-
-        callback.invoke(
-            ExtractorLink(
-                source = this.name,
-                name = this.name,
-                url = streamUrl,
-                referer = "$embedHost/",
-                quality = Qualities.Unknown.value,
-                type = ExtractorLinkType.M3U8,
-                headers = mapOf(
-                    "Referer" to "$embedHost/",
-                    "Origin" to embedHost,
-                    "User-Agent" to userAgent
-                )
-            )
-        )
-
-        return true
+        return foundAny
     }
 }

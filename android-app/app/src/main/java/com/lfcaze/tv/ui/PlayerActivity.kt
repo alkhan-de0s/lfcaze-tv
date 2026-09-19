@@ -1,13 +1,8 @@
 package com.lfcaze.tv.ui
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
-import android.view.View
-import android.view.WindowInsets
-import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -19,24 +14,27 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.*
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.lifecycleScope
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -46,46 +44,39 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.ui.PlayerView
-import com.lfcaze.tv.model.LiverpoolChannel
+import com.lfcaze.tv.model.ResolvedStream
 import com.lfcaze.tv.network.StreamResolver
+import com.lfcaze.tv.ui.theme.LfcGold
 import com.lfcaze.tv.ui.theme.LfcRed
 import com.lfcaze.tv.ui.theme.SurfaceDark
 import com.lfcaze.tv.ui.theme.TextPrimary
 import com.lfcaze.tv.ui.theme.TextSecondary
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @UnstableApi
 class PlayerActivity : ComponentActivity() {
 
     private var exoPlayer: ExoPlayer? = null
+    private var servers: ArrayList<ResolvedStream> = arrayListOf()
     private var currentChannelId: String = ""
     private var currentChannelName: String = ""
-    private var allChannels: ArrayList<LiverpoolChannel> = arrayListOf()
+    private var matchName: String = ""
 
     companion object {
-        const val EXTRA_STREAM_URL = "extra_stream_url"
-        const val EXTRA_REFERER = "extra_referer"
-        const val EXTRA_ORIGIN = "extra_origin"
-        const val EXTRA_USER_AGENT = "extra_user_agent"
+        const val EXTRA_SERVERS = "extra_servers"
         const val EXTRA_CHANNEL_ID = "extra_channel_id"
         const val EXTRA_CHANNEL_NAME = "extra_channel_name"
         const val EXTRA_MATCH_NAME = "extra_match_name"
 
         fun start(
             context: Context,
-            streamUrl: String,
-            referer: String,
-            origin: String,
-            userAgent: String,
+            servers: List<ResolvedStream>,
             channelId: String,
             channelName: String,
             matchName: String
         ) {
             val intent = Intent(context, PlayerActivity::class.java).apply {
-                putExtra(EXTRA_STREAM_URL, streamUrl)
-                putExtra(EXTRA_REFERER, referer)
-                putExtra(EXTRA_ORIGIN, origin)
-                putExtra(EXTRA_USER_AGENT, userAgent)
+                putExtra(EXTRA_SERVERS, ArrayList(servers))
                 putExtra(EXTRA_CHANNEL_ID, channelId)
                 putExtra(EXTRA_CHANNEL_NAME, channelName)
                 putExtra(EXTRA_MATCH_NAME, matchName)
@@ -96,34 +87,65 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        try {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } catch (_: Exception) {}
         hideSystemUI()
 
-        val streamUrl = intent.getStringExtra(EXTRA_STREAM_URL) ?: ""
-        val referer = intent.getStringExtra(EXTRA_REFERER) ?: "https://tiestep.top/"
-        val origin = intent.getStringExtra(EXTRA_ORIGIN) ?: "https://tiestep.top"
-        val userAgent = intent.getStringExtra(EXTRA_USER_AGENT) ?: StreamResolver.USER_AGENT
+        @Suppress("DEPRECATION", "UNCHECKED_CAST")
+        servers = (intent.getSerializableExtra(EXTRA_SERVERS) as? ArrayList<ResolvedStream>) ?: arrayListOf()
         currentChannelId = intent.getStringExtra(EXTRA_CHANNEL_ID) ?: ""
         currentChannelName = intent.getStringExtra(EXTRA_CHANNEL_NAME) ?: "Canlı Yayım"
-        val matchName = intent.getStringExtra(EXTRA_MATCH_NAME) ?: "Liverpool FC"
+        matchName = intent.getStringExtra(EXTRA_MATCH_NAME) ?: "Canlı Oyun"
 
-        initPlayer(streamUrl, referer, origin, userAgent)
+        val initialStream = servers.firstOrNull() ?: ResolvedStream(
+            streamUrl = "",
+            referer = "https://tiestep.top/",
+            origin = "https://tiestep.top",
+            userAgent = StreamResolver.USER_AGENT,
+            channelName = currentChannelName,
+            serverName = "Player 1"
+        )
+
+        initPlayer(initialStream)
 
         setContent {
+            var currentServerIdx by remember { mutableIntStateOf(0) }
             var isBuffering by remember { mutableStateOf(true) }
             var errorMessage by remember { mutableStateOf<String?>(null) }
-            var channelTitle by remember { mutableStateOf(currentChannelName) }
+            var showControls by remember { mutableStateOf(true) }
+            var showServerDialog by remember { mutableStateOf(false) }
+
+            val currentServer = servers.getOrNull(currentServerIdx) ?: initialStream
+
+            // Auto-hide controls after 3.5 seconds
+            LaunchedEffect(showControls) {
+                if (showControls) {
+                    delay(3500)
+                    showControls = false
+                }
+            }
 
             DisposableEffect(exoPlayer) {
                 val listener = object : Player.Listener {
                     override fun onPlaybackStateChanged(state: Int) {
                         isBuffering = state == Player.STATE_BUFFERING
+                        if (state == Player.STATE_READY) {
+                            errorMessage = null
+                        }
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
-                        errorMessage = "Yayım başladıla bilmədi (${error.errorCodeName}). Yenidən cəhd edilir..."
-                        exoPlayer?.prepare()
-                        exoPlayer?.play()
+                        // Auto-fallback to next server if available!
+                        if (currentServerIdx < servers.size - 1) {
+                            val nextIdx = currentServerIdx + 1
+                            val nextServer = servers[nextIdx]
+                            errorMessage = "${currentServer.serverName} xətası. Növbəti serverə (${nextServer.serverName}) keçilir..."
+                            currentServerIdx = nextIdx
+                            switchServer(nextServer)
+                        } else {
+                            errorMessage = "Yayım xətası (${error.errorCodeName}). Zəhmət olmasa digər serveri seçin."
+                        }
                     }
                 }
                 exoPlayer?.addListener(listener)
@@ -136,6 +158,10 @@ class PlayerActivity : ComponentActivity() {
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black)
+                    .clickable {
+                        // Toggle header and controls visibility on tap!
+                        showControls = !showControls
+                    }
             ) {
                 // ExoPlayer Surface View
                 AndroidView(
@@ -151,35 +177,85 @@ class PlayerActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Top Header Overlay
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0x88000000))
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // Top Header Overlay (AUTO-HIDES AFTER 3.5 SECONDS)
+                AnimatedVisibility(
+                    visible = showControls,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.align(Alignment.TopCenter)
                 ) {
-                    IconButton(onClick = { finish() }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Geri",
-                            tint = TextPrimary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text(
-                            text = matchName,
-                            color = TextPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = channelTitle,
-                            color = LfcRed,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color(0xEE000000), Color(0x66000000), Color.Transparent)
+                                )
+                            )
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { finish() }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Geri",
+                                tint = Color.White
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = matchName,
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    color = LfcRed,
+                                    shape = CircleShape,
+                                    modifier = Modifier.size(7.dp)
+                                ) {}
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "$currentChannelName • ${currentServer.serverName}",
+                                    color = LfcGold,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        // Server Switcher Button
+                        if (servers.size > 1) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0x55FFFFFF),
+                                modifier = Modifier.clickable {
+                                    showServerDialog = true
+                                    showControls = true
+                                }
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Dns,
+                                        contentDescription = "Serverlər",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Serverlər (${servers.size})",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -194,11 +270,11 @@ class PlayerActivity : ComponentActivity() {
                 // Error Banner
                 errorMessage?.let { msg ->
                     Surface(
-                        color = Color(0xDD9E0B22),
+                        color = Color(0xEE8B0000),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(16.dp)
+                            .padding(bottom = 60.dp, start = 16.dp, end = 16.dp)
                     ) {
                         Text(
                             text = msg,
@@ -208,19 +284,122 @@ class PlayerActivity : ComponentActivity() {
                         )
                     }
                 }
+
+                // Server Selection Modal Dialog
+                if (showServerDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showServerDialog = false },
+                        containerColor = SurfaceDark,
+                        title = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Dns,
+                                    contentDescription = null,
+                                    tint = LfcRed,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Yayım Serverini Seçin",
+                                    color = TextPrimary,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        },
+                        text = {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                itemsIndexed(servers) { idx, srv ->
+                                    val isSelected = idx == currentServerIdx
+                                    Card(
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (isSelected) LfcRed.copy(alpha = 0.25f) else Color(0xFF222634)
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                currentServerIdx = idx
+                                                switchServer(srv)
+                                                showServerDialog = false
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Tv,
+                                                contentDescription = null,
+                                                tint = if (isSelected) LfcRed else TextSecondary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = srv.serverName,
+                                                    color = if (isSelected) Color.White else TextPrimary,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    fontSize = 15.sp
+                                                )
+                                                Text(
+                                                    text = if (idx == 0) "Əsas Server • Tövsiyə olunur" else "Alternativ Ehtiyat Server",
+                                                    color = if (isSelected) LfcGold else TextSecondary,
+                                                    fontSize = 11.sp
+                                                )
+                                            }
+                                            if (isSelected) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = "Seçilib",
+                                                    tint = LfcGold,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showServerDialog = false }) {
+                                Text("Bağla", color = Color.White)
+                            }
+                        }
+                    )
+                }
             }
         }
     }
 
-    private fun initPlayer(streamUrl: String, referer: String, origin: String, userAgent: String) {
-        // Optimized buffer for zero-lag live sports streaming
+    private fun switchServer(resolved: ResolvedStream) {
+        val headers = mapOf(
+            "Referer" to resolved.referer,
+            "Origin" to resolved.origin,
+            "User-Agent" to resolved.userAgent
+        )
+        val dataSourceFactory = OkHttpDataSource.Factory(StreamResolver.httpClient)
+            .setDefaultRequestProperties(headers)
+
+        val mediaSource = HlsMediaSource.Factory(dataSourceFactory)
+            .createMediaSource(MediaItem.fromUri(resolved.streamUrl))
+
+        exoPlayer?.apply {
+            stop()
+            setMediaSource(mediaSource)
+            prepare()
+            playWhenReady = true
+        }
+    }
+
+    private fun initPlayer(resolved: ResolvedStream) {
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                2000,   // Min buffer: 2 seconds
-                15000,  // Max buffer: 15 seconds
-                800,    // Buffer for playback: 0.8s
-                1200    // Buffer for rebuffer: 1.2s
-            )
+            .setBufferDurationsMs(2000, 15000, 800, 1200)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
@@ -228,23 +407,7 @@ class PlayerActivity : ComponentActivity() {
             .setLoadControl(loadControl)
             .build()
 
-        val headers = mapOf(
-            "Referer" to referer,
-            "Origin" to origin,
-            "User-Agent" to userAgent
-        )
-
-        val dataSourceFactory = OkHttpDataSource.Factory(StreamResolver.httpClient)
-            .setDefaultRequestProperties(headers)
-
-        val mediaSource = HlsMediaSource.Factory(dataSourceFactory)
-            .createMediaSource(MediaItem.fromUri(streamUrl))
-
-        exoPlayer?.apply {
-            setMediaSource(mediaSource)
-            prepare()
-            playWhenReady = true
-        }
+        switchServer(resolved)
     }
 
     private fun hideSystemUI() {
@@ -254,9 +417,7 @@ class PlayerActivity : ComponentActivity() {
             controller.hide(WindowInsetsCompat.Type.systemBars())
             controller.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        } catch (e: Exception) {
-            // Ignore insets errors on OEM devices
-        }
+        } catch (_: Exception) {}
     }
 
     override fun onPause() {

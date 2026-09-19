@@ -17,89 +17,93 @@ object StreamResolver {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
 
     val httpClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
         .followRedirects(true)
         .build()
 
+    val PLAYER_SERVERS = listOf(
+        "stream" to "Player 1 (Əsas)",
+        "cast" to "Player 2 (Cast)",
+        "watch" to "Player 3 (Watch)",
+        "plus" to "Player 4 (Plus)",
+        "casting" to "Player 5 (Casting)",
+        "player" to "Player 6 (Player)"
+    )
+
+    suspend fun resolveAll(channelId: String, channelName: String): Result<List<ResolvedStream>> =
+        withContext(Dispatchers.IO) {
+            val cleanId = channelId.trim().removePrefix("stream-")
+            val watchUrl = "$MAIN_URL/watch.php?id=$cleanId"
+            val results = mutableListOf<ResolvedStream>()
+
+            for ((folder, serverLabel) in PLAYER_SERVERS) {
+                val streamPageUrl = "$MAIN_URL/$folder/stream-$cleanId.php"
+                try {
+                    val req = Request.Builder()
+                        .url(streamPageUrl)
+                        .header("User-Agent", USER_AGENT)
+                        .header("Referer", watchUrl)
+                        .build()
+
+                    val res = httpClient.newCall(req).execute()
+                    val html = res.body?.string() ?: continue
+                    val doc = Jsoup.parse(html)
+
+                    val frameSrc = doc.select("iframe#thatframe, iframe[src*='/e/'], iframe").attr("src").trim()
+                    if (frameSrc.isBlank() || frameSrc.contains("about:blank")) continue
+
+                    val embedUrl = when {
+                        frameSrc.startsWith("//") -> "https:$frameSrc"
+                        frameSrc.startsWith("http") -> frameSrc
+                        else -> "$MAIN_URL/$frameSrc"
+                    }
+
+                    val embedUri = URI(embedUrl)
+                    val embedHost = "${embedUri.scheme}://${embedUri.host}"
+
+                    val embedReq = Request.Builder()
+                        .url(embedUrl)
+                        .header("User-Agent", USER_AGENT)
+                        .header("Referer", streamPageUrl)
+                        .build()
+
+                    val embedRes = httpClient.newCall(embedReq).execute()
+                    val embedHtml = embedRes.body?.string() ?: continue
+
+                    val econfigRegex = """window\._econfig\s*=\s*'([^']+)'""".toRegex()
+                    val econfig = econfigRegex.find(embedHtml)?.groupValues?.get(1) ?: continue
+
+                    val decodedJson = DaddyLiveDecoder.decodeEConfig(econfig) ?: continue
+                    val streamUrl = DaddyLiveDecoder.extractStreamUrl(decodedJson) ?: continue
+
+                    results.add(
+                        ResolvedStream(
+                            streamUrl = streamUrl,
+                            referer = "$embedHost/",
+                            origin = embedHost,
+                            userAgent = USER_AGENT,
+                            channelName = channelName,
+                            serverName = serverLabel
+                        )
+                    )
+                } catch (e: Throwable) {
+                    continue
+                }
+            }
+
+            if (results.isNotEmpty()) {
+                Result.success(results)
+            } else {
+                Result.failure(Exception("Heç bir yayım serveri ilə əlaqə qurula bilmədi."))
+            }
+        }
+
     suspend fun resolve(channelId: String, channelName: String): Result<ResolvedStream> =
         withContext(Dispatchers.IO) {
-            try {
-                val cleanId = channelId.trim().removePrefix("stream-")
-                val watchUrl = "$MAIN_URL/watch.php?id=$cleanId"
-
-                // Step 1: Fetch watch page to find player stream iframe
-                val playerFolders = listOf("stream", "cast", "watch", "player", "plus", "casting")
-                var embedUrl: String? = null
-                var streamPageReferer: String = "$MAIN_URL/stream/stream-$cleanId.php"
-
-                for (folder in playerFolders) {
-                    val streamPageUrl = "$MAIN_URL/$folder/stream-$cleanId.php"
-                    try {
-                        val req = Request.Builder()
-                            .url(streamPageUrl)
-                            .header("User-Agent", USER_AGENT)
-                            .header("Referer", watchUrl)
-                            .build()
-
-                        val res = httpClient.newCall(req).execute()
-                        val html = res.body?.string() ?: ""
-                        val doc = Jsoup.parse(html)
-
-                        val frameSrc = doc.select("iframe#thatframe, iframe[src*='/e/'], iframe").attr("src").trim()
-                        if (frameSrc.isNotBlank() && !frameSrc.contains("about:blank")) {
-                            embedUrl = when {
-                                frameSrc.startsWith("//") -> "https:$frameSrc"
-                                frameSrc.startsWith("http") -> frameSrc
-                                else -> "$MAIN_URL/$frameSrc"
-                            }
-                            streamPageReferer = streamPageUrl
-                            break
-                        }
-                    } catch (e: Throwable) {
-                        continue
-                    }
-                }
-
-                if (embedUrl.isNullOrBlank()) {
-                    return@withContext Result.failure(Exception("Yayın oynatıcı adresi bulunamadı."))
-                }
-
-                // Step 2: Fetch embed page to find window._econfig
-                val embedUri = URI(embedUrl)
-                val embedHost = "${embedUri.scheme}://${embedUri.host}"
-
-                val embedReq = Request.Builder()
-                    .url(embedUrl)
-                    .header("User-Agent", USER_AGENT)
-                    .header("Referer", streamPageReferer)
-                    .build()
-
-                val embedRes = httpClient.newCall(embedReq).execute()
-                val embedHtml = embedRes.body?.string() ?: ""
-
-                val econfigRegex = """window\._econfig\s*=\s*'([^']+)'""".toRegex()
-                val econfig = econfigRegex.find(embedHtml)?.groupValues?.get(1)
-                    ?: return@withContext Result.failure(Exception("Yayın şifresi (econfig) okunamadı."))
-
-                // Step 3: Decode econfig & extract stream URL
-                val decodedJson = DaddyLiveDecoder.decodeEConfig(econfig)
-                    ?: return@withContext Result.failure(Exception("Yayın şifresi çözülemedi."))
-
-                val streamUrl = DaddyLiveDecoder.extractStreamUrl(decodedJson)
-                    ?: return@withContext Result.failure(Exception("Canlı yayın m3u8 linki bulunamadı."))
-
-                val resolved = ResolvedStream(
-                    streamUrl = streamUrl,
-                    referer = "$embedHost/",
-                    origin = embedHost,
-                    userAgent = USER_AGENT,
-                    channelName = channelName
-                )
-
-                Result.success(resolved)
-            } catch (e: Throwable) {
-                Result.failure(e)
+            val all = resolveAll(channelId, channelName)
+            all.mapCatching { list ->
+                list.firstOrNull() ?: throw Exception("Yayım serveri tapılmadı.")
             }
         }
 }

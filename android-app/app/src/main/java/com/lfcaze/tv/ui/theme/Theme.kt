@@ -2,6 +2,7 @@ package com.lfcaze.tv.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
 private val DarkColorScheme = darkColorScheme(
@@ -9,16 +10,30 @@ private val DarkColorScheme = darkColorScheme(
     secondary = LfcGold,
     background = BgDark,
     surface = SurfaceDark,
-    onPrimary = TextPrimary,
+    onPrimary = TextPrimaryDark,
     onSecondary = BgDark,
-    onBackground = TextPrimary,
-    onSurface = TextPrimary
+    onBackground = TextPrimaryDark,
+    onSurface = TextPrimaryDark
+)
+
+private val LightColorScheme = lightColorScheme(
+    primary = LfcRed,
+    secondary = LfcGold,
+    background = BgLight,
+    surface = SurfaceLight,
+    onPrimary = SurfaceLight,
+    onSecondary = TextPrimaryLight,
+    onBackground = TextPrimaryLight,
+    onSurface = TextPrimaryLight
 )
 
 @Composable
-fun LFCAZETVTheme(content: @Composable () -> Unit) {
+fun LFCAZETVTheme(
+    darkTheme: Boolean = true,
+    content: @Composable () -> Unit
+) {
     MaterialTheme(
-        colorScheme = DarkColorScheme,
+        colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         content = content
     )
 }

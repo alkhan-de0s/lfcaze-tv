@@ -23,5 +23,6 @@ data class ResolvedStream(
     val referer: String,
     val origin: String,
     val userAgent: String,
-    val channelName: String
-)
+    val channelName: String,
+    val serverName: String = "Player 1"
+) : java.io.Serializable
