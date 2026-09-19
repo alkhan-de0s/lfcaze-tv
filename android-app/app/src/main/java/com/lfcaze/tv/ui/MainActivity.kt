@@ -64,7 +64,10 @@ fun HomeScreen() {
     var isLoading by remember { mutableStateOf(true) }
     var resolvingChannel by remember { mutableStateOf<LiverpoolChannel?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var showWelcomeDialog by remember { mutableStateOf(true) }
+    val prefs = remember { context.getSharedPreferences("lfc_prefs", android.content.Context.MODE_PRIVATE) }
+    var showWelcomeDialog by remember {
+        mutableStateOf(!prefs.getBoolean("welcome_modal_shown", false))
+    }
 
     fun loadData() {
         isLoading = true
@@ -355,7 +358,10 @@ fun HomeScreen() {
                             Spacer(modifier = Modifier.height(24.dp))
 
                             Button(
-                                onClick = { showWelcomeDialog = false },
+                                onClick = {
+                                    prefs.edit().putBoolean("welcome_modal_shown", true).apply()
+                                    showWelcomeDialog = false
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = LfcRed),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
@@ -363,7 +369,7 @@ fun HomeScreen() {
                                     .height(46.dp)
                             ) {
                                 Text(
-                                    text = "Daxil ol",
+                                    text = "Başa düşdüm",
                                     color = Color.White,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold
@@ -416,29 +422,26 @@ fun MatchBannerCard(config: LiverpoolConfig?) {
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Team / Match Logo
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color.White,
-                    modifier = Modifier.size(72.dp)
+                // Team / Match Logo (seamless background)
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
                 ) {
                     if (!config?.poster.isNullOrBlank()) {
                         AsyncImage(
                             model = config?.poster,
                             contentDescription = null,
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(4.dp)
+                            modifier = Modifier.fillMaxSize()
                         )
                     } else {
                         Image(
                             painter = painterResource(id = R.drawable.ic_olsc_logo),
                             contentDescription = null,
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(4.dp)
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
