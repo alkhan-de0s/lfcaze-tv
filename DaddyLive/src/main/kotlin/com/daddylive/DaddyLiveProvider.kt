@@ -59,9 +59,13 @@ class DaddyLiveProvider : MainAPI() {
 
         // 1. Check remote admin configuration from GitHub (updated via Telegram Bot)
         try {
+            val bustUrl = "$remoteLiverpoolConfigUrl?t=${System.currentTimeMillis()}"
             val responseText = app.get(
-                remoteLiverpoolConfigUrl,
-                headers = mapOf("Cache-Control" to "no-cache")
+                bustUrl,
+                headers = mapOf(
+                    "Cache-Control" to "no-cache, no-store, must-revalidate",
+                    "Pragma" to "no-cache"
+                )
             ).text
 
             val config = jsonMapper.readValue(responseText, LiverpoolConfig::class.java)
@@ -80,7 +84,7 @@ class DaddyLiveProvider : MainAPI() {
                         else -> null
                     } ?: continue
 
-                    val streamName = "$matchTitle - ${ch.name ?: "Canlı Yayın"}"
+                    val streamName = ch.name?.takeIf { it.isNotBlank() } ?: "$matchTitle Yayın"
                     liverpoolStreams.add(
                         newLiveSearchResponse(streamName, targetUrl, TvType.Live) {
                             this.posterUrl = matchPoster
@@ -91,6 +95,7 @@ class DaddyLiveProvider : MainAPI() {
         } catch (e: Throwable) {
             // Ignore failure, fall through to auto-scraper
         }
+
 
         if (liverpoolStreams.isNotEmpty()) {
             return liverpoolStreams
