@@ -1,5 +1,7 @@
 package com.daddylive
 
+import android.util.Base64
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.lagradost.cloudstream3.*
@@ -9,24 +11,23 @@ import com.lagradost.cloudstream3.utils.Qualities
 import org.jsoup.nodes.Document
 import java.net.URI
 
-data class LiverpoolChannel(
-    val id: String? = null,
-    val name: String? = null,
-    val url: String? = null
+data class ScheduleChannel(
+    @JsonProperty("n") val name: String = "",
+    @JsonProperty("id") val id: String = ""
 )
 
-data class LiverpoolConfig(
-    val active: Boolean = false,
-    val match: String? = null,
-    val info: String? = null,
-    val poster: String? = null,
-    val channels: List<LiverpoolChannel> = emptyList()
+data class ScheduleEvent(
+    @JsonProperty("t") val title: String = "",
+    @JsonProperty("tm") val time: String = "",
+    @JsonProperty("c") val category: String = "",
+    @JsonProperty("s") val sport: String = "",
+    @JsonProperty("ch") val channels: List<ScheduleChannel> = emptyList()
 )
 
 class DaddyLiveProvider : MainAPI() {
     override var mainUrl = "https://dlive.sx"
     override var name = "DaddyLive"
-    override val supportedTypes = setOf(TvType.Live)
+    override val supportedTypes = setOf(TvType.Live, TvType.TvSeries)
     override var lang = "en"
     override val hasMainPage = true
     override val hasQuickSearch = true
@@ -35,99 +36,100 @@ class DaddyLiveProvider : MainAPI() {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
 
     private val defaultPoster = "https://dlive.sx/assets/logos/logo.png"
-    private val liverpoolPoster =
-        "https://upload.wikimedia.org/wikipedia/en/thumb/0/0c/Liverpool_FC.svg/800px-Liverpool_FC.svg.png"
-    private val remoteLiverpoolConfigUrl =
-        "https://raw.githubusercontent.com/alkhan-de0s/lfcaze-tv/master/liverpool.json"
 
     private val jsonMapper = jacksonObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
-    // In-memory cache for channel list
+    // In-memory cache for 24/7 channels
     private var cachedChannels: List<LiveSearchResponse> = emptyList()
     private var lastCacheTime: Long = 0L
     private val cacheDurationMs = 15 * 60 * 1000L // 15 minutes
 
+    // In-memory cache for scheduled sports events
+    private var cachedScheduleBySport: Map<String, List<LiveSearchResponse>> = emptyMap()
+    private var cachedAllEvents: List<ScheduleEvent> = emptyList()
+    private var lastScheduleFetchTime: Long = 0L
+    private val scheduleCacheDurationMs = 10 * 60 * 1000L // 10 minutes
+
     override val mainPage = mainPageOf(
-        "liverpool" to "🔴 Liverpool FC Azerbaijan Supporters",
-        "24-7-channels.php" to "24/7 Channels",
-        "" to "Live Sports & Upcoming Events"
+        "24-7-channels.php" to "📺 Bütün Kanallar (24/7)",
+        "soccer" to "⚽ Futbol (Canlı & Bu gün)",
+        "basketball" to "🏀 Basketbol",
+        "tennis" to "🎾 Tennis",
+        "combat" to "🥊 Döyüş (UFC, MMA, Boks)",
+        "motorsport" to "🏎️ Motorsport (F1, Moto)",
+        "hockey" to "🏒 Xokkey (NHL)",
+        "football_rugby" to "🏈 Amerikan Futbolu & Reqbi",
+        "baseball" to "⚾ Beyzbol (MLB)",
+        "other" to "🏆 Digər İdman Növləri"
     )
 
+    private fun categorizeSport(catName: String, eventTitle: String): String {
+        val text = "$catName $eventTitle".lowercase()
+        return when {
+            text.contains("⚽") || text.contains("soccer") || text.contains("premiership") ||
+            (text.contains("league") && !text.contains("rugby") && !text.contains("hockey")) ||
+            (text.contains("championship") && !text.contains("usl") && !text.contains("rugby")) ||
+            text.contains("fifa") || text.contains("uefa") || text.contains("mls") ||
+            text.contains("taça de portugal") -> "soccer"
 
-    private suspend fun fetchLiverpoolStreams(): List<LiveSearchResponse> {
-        val liverpoolStreams = mutableListOf<LiveSearchResponse>()
+            text.contains("🏀") || text.contains("basketball") || text.contains("nba") || text.contains("wnba") -> "basketball"
 
-        // 1. Check remote admin configuration from GitHub (updated via Telegram Bot)
-        try {
-            val bustUrl = "$remoteLiverpoolConfigUrl?t=${System.currentTimeMillis()}"
-            val responseText = app.get(
-                bustUrl,
-                headers = mapOf(
-                    "Cache-Control" to "no-cache, no-store, must-revalidate",
-                    "Pragma" to "no-cache"
-                )
-            ).text
+            text.contains("🎾") || text.contains("tennis") || text.contains("atp") || text.contains("wta") || text.contains("davis cup") -> "tennis"
 
-            val config = jsonMapper.readValue(responseText, LiverpoolConfig::class.java)
-            if (config.active && config.channels.isNotEmpty()) {
-                val matchTitle = config.match?.takeIf { it.isNotBlank() } ?: "Liverpool FC"
-                val matchPoster = config.poster?.takeIf { it.isNotBlank() } ?: liverpoolPoster
+            text.contains("🥊") || text.contains("ufc") || text.contains("mma") || text.contains("boxing") || text.contains("wrestling") || text.contains("aew") -> "combat"
 
-                for (ch in config.channels) {
-                    val rawId = ch.id?.trim() ?: ""
-                    val directUrl = ch.url?.trim() ?: ""
-                    val targetUrl = when {
-                        directUrl.isNotBlank() -> fixUrl(directUrl)
-                        rawId.startsWith("http") -> rawId
-                        rawId.startsWith("stream-") -> "$mainUrl/watch.php?id=$rawId"
-                        rawId.isNotBlank() -> "$mainUrl/watch.php?id=stream-$rawId"
-                        else -> null
-                    } ?: continue
+            text.contains("🏎") || text.contains("🏁") || text.contains("motorsport") || text.contains("f1") || text.contains("moto") || text.contains("rally") -> "motorsport"
 
-                    val streamName = ch.name?.takeIf { it.isNotBlank() } ?: "$matchTitle Yayın"
-                    liverpoolStreams.add(
-                        newLiveSearchResponse(streamName, targetUrl, TvType.Live) {
-                            this.posterUrl = matchPoster
-                        }
-                    )
-                }
-            }
+            text.contains("🏒") || text.contains("hockey") || text.contains("nhl") || text.contains("khl") || text.contains("ohl") || text.contains("ushl") -> "hockey"
+
+            text.contains("🏈") || text.contains("cfl") || text.contains("nfl") || text.contains("college football") ||
+            text.contains("🏉") || text.contains("rugby") || text.contains("afl") -> "football_rugby"
+
+            text.contains("⚾") || text.contains("baseball") || text.contains("mlb") -> "baseball"
+
+            else -> "other"
+        }
+    }
+
+    private fun getPosterForSport(sport: String): String {
+        return when (sport) {
+            "soccer" -> "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=600&auto=format&fit=crop&q=80"
+            "basketball" -> "https://images.unsplash.com/photo-1546519638-68e109498ffc?w=600&auto=format&fit=crop&q=80"
+            "tennis" -> "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=600&auto=format&fit=crop&q=80"
+            "combat" -> "https://images.unsplash.com/photo-1517438322307-e67111335449?w=600&auto=format&fit=crop&q=80"
+            "motorsport" -> "https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=600&auto=format&fit=crop&q=80"
+            "hockey" -> "https://images.unsplash.com/photo-1580748141549-71748dbe0bdc?w=600&auto=format&fit=crop&q=80"
+            "football_rugby" -> "https://images.unsplash.com/photo-1566577739112-5180d4bf9390?w=600&auto=format&fit=crop&q=80"
+            "baseball" -> "https://images.unsplash.com/photo-1508344928928-7165b67de128?w=600&auto=format&fit=crop&q=80"
+            else -> defaultPoster
+        }
+    }
+
+    private fun encodeEventUrl(event: ScheduleEvent): String {
+        return try {
+            val json = jsonMapper.writeValueAsString(event)
+            val b64 = Base64.encodeToString(
+                json.toByteArray(Charsets.UTF_8),
+                Base64.URL_SAFE or Base64.NO_WRAP
+            )
+            "$mainUrl/event.php?data=$b64"
         } catch (e: Throwable) {
-            // Ignore failure, fall through to auto-scraper
+            "$mainUrl/"
         }
+    }
 
-
-        if (liverpoolStreams.isNotEmpty()) {
-            return liverpoolStreams
-        }
-
-        // 2. Fallback: Automatically search upcoming live events for Liverpool/LFC
-        try {
-            val upcoming = fetchUpcomingEvents()
-            val autoLfc = upcoming.filter { event ->
-                val title = event.name.lowercase()
-                title.contains("liverpool") || title.contains(" lfc") || title.startsWith("lfc ")
-            }
-            if (autoLfc.isNotEmpty()) {
-                return autoLfc
-            }
+    private fun decodeEventUrl(url: String): ScheduleEvent? {
+        val b64 = url.substringAfter("data=", "").substringBefore("&").takeIf { it.isNotBlank() } ?: return null
+        return try {
+            val json = String(
+                Base64.decode(b64, Base64.URL_SAFE or Base64.NO_WRAP),
+                Charsets.UTF_8
+            )
+            jsonMapper.readValue(json, ScheduleEvent::class.java)
         } catch (e: Throwable) {
-            // Ignore
+            null
         }
-
-        // 3. Fallback: If no match today, show LFCTV if available in 24/7 channels
-        try {
-            val allChannels = fetchAll247Channels()
-            val lfctv = allChannels.filter { it.name.contains("LFCTV", ignoreCase = true) }
-            if (lfctv.isNotEmpty()) {
-                return lfctv
-            }
-        } catch (e: Throwable) {
-            // Ignore
-        }
-
-        return emptyList()
     }
 
     private suspend fun fetchAll247Channels(): List<LiveSearchResponse> {
@@ -165,32 +167,72 @@ class DaddyLiveProvider : MainAPI() {
         }
     }
 
-    private suspend fun fetchUpcomingEvents(): List<LiveSearchResponse> {
+    private suspend fun fetchSchedule(): Map<String, List<LiveSearchResponse>> {
+        val now = System.currentTimeMillis()
+        if (cachedScheduleBySport.isNotEmpty() && (now - lastScheduleFetchTime) < scheduleCacheDurationMs) {
+            return cachedScheduleBySport
+        }
+
         return try {
             val doc = app.get(
                 "$mainUrl/",
                 headers = mapOf("User-Agent" to userAgent)
             ).document
 
-            val items = doc.select("a.upcoming-card").mapNotNull { card ->
-                val title = card.selectFirst(".upcoming-card__title")?.text()?.trim()
-                    ?: card.selectFirst("img")?.attr("alt")?.trim()
-                    ?: card.text().trim()
-                val href = card.attr("href").trim()
-                if (title.isBlank() || href.isBlank()) return@mapNotNull null
+            val eventsList = mutableListOf<ScheduleEvent>()
+            val bySport = mutableMapOf<String, MutableList<LiveSearchResponse>>()
 
-                val img = card.selectFirst("img")?.attr("src")?.trim()
-                val poster = if (!img.isNullOrBlank()) fixUrl(img) else defaultPoster
-                val fullUrl = fixUrl(href)
+            val catElements = doc.select("div.schedule__category")
+            for (catElem in catElements) {
+                val catName = catElem.selectFirst(".schedule__catHeader .card__meta, .card__meta")?.text()?.trim() ?: ""
+                val eventElements = catElem.select(".schedule__event")
+                for (evElem in eventElements) {
+                    val time = evElem.selectFirst(".schedule__time")?.text()?.trim() ?: ""
+                    val rawTitle = evElem.selectFirst(".schedule__eventTitle")?.text()?.trim() ?: ""
+                    if (rawTitle.isBlank()) continue
 
-                newLiveSearchResponse(title, fullUrl, TvType.Live) {
-                    this.posterUrl = poster
+                    val channelLinks = evElem.select(".schedule__channels a[href*='watch.php?id=']").mapNotNull { a ->
+                        val chName = a.text().trim()
+                        val chHref = a.attr("href").trim()
+                        val idMatch = """(?:id=)(\d+)""".toRegex().find(chHref)
+                        val chId = idMatch?.groupValues?.get(1) ?: ""
+                        if (chName.isNotBlank() && chId.isNotBlank()) {
+                            ScheduleChannel(name = chName, id = chId)
+                        } else null
+                    }
+                    if (channelLinks.isEmpty()) continue
+
+                    val sport = categorizeSport(catName, rawTitle)
+                    val event = ScheduleEvent(
+                        title = rawTitle,
+                        time = time,
+                        category = catName,
+                        sport = sport,
+                        channels = channelLinks
+                    )
+                    eventsList.add(event)
+
+                    val displayName = if (time.isNotBlank()) "[$time] $rawTitle" else rawTitle
+                    val eventUrl = encodeEventUrl(event)
+                    val poster = getPosterForSport(sport)
+
+                    val searchResponse = newLiveSearchResponse(displayName, eventUrl, TvType.Live) {
+                        this.posterUrl = poster
+                    }
+
+                    bySport.getOrPut(sport) { mutableListOf() }.add(searchResponse)
                 }
             }
-            items
+
+            if (eventsList.isNotEmpty()) {
+                cachedAllEvents = eventsList
+                cachedScheduleBySport = bySport
+                lastScheduleFetchTime = now
+            }
+            bySport
         } catch (e: Throwable) {
             e.printStackTrace()
-            emptyList()
+            cachedScheduleBySport
         }
     }
 
@@ -198,11 +240,11 @@ class DaddyLiveProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        val list = when (request.data) {
-            "liverpool" -> fetchLiverpoolStreams()
-            "24-7-channels.php" -> fetchAll247Channels()
-            "" -> fetchUpcomingEvents()
-            else -> fetchAll247Channels()
+        val list = if (request.data == "24-7-channels.php") {
+            fetchAll247Channels()
+        } else {
+            val scheduleMap = fetchSchedule()
+            scheduleMap[request.data] ?: emptyList()
         }
 
         return newHomePageResponse(
@@ -212,46 +254,73 @@ class DaddyLiveProvider : MainAPI() {
         )
     }
 
-
     override suspend fun search(query: String): List<SearchResponse> {
         val q = query.trim().lowercase()
         if (q.isBlank()) return emptyList()
 
         val tokens = q.split("""\s+""".toRegex()).filter { it.isNotBlank() }
-        val channels = fetchAll247Channels()
-
-        // Normalize function removing punctuation (e.g. be-in -> bein)
         fun norm(s: String) = s.lowercase().replace("""[^a-z0-9]""".toRegex(), "")
         val normQ = norm(q)
 
+        // 1. Search 24/7 channels
+        val channels = fetchAll247Channels()
         val channelMatches = channels.filter { ch ->
             val nameLower = ch.name.lowercase()
             val normName = norm(nameLower)
-            
-            // 1. Direct contains or normalized contains
-            if (nameLower.contains(q) || normName.contains(normQ)) return@filter true
-            
-            // 2. All query tokens present
-            tokens.all { t -> nameLower.contains(t) || normName.contains(norm(t)) }
+            nameLower.contains(q) || normName.contains(normQ) || tokens.all { t -> nameLower.contains(t) || normName.contains(norm(t)) }
         }
 
-        // Also search upcoming live events if query might be a match/team
-        val upcomingMatches = try {
-            val upcoming = fetchUpcomingEvents()
-            upcoming.filter { event ->
-                val nameLower = event.name.lowercase()
-                val normName = norm(nameLower)
-                nameLower.contains(q) || normName.contains(normQ) || tokens.all { t -> nameLower.contains(t) || normName.contains(norm(t)) }
+        // 2. Search live schedule events
+        fetchSchedule() // ensure cachedAllEvents is populated
+        val eventMatches = cachedAllEvents.filter { event ->
+            val nameLower = event.title.lowercase()
+            val normName = norm(nameLower)
+            val catLower = event.category.lowercase()
+            nameLower.contains(q) || normName.contains(normQ) || catLower.contains(q) ||
+                    tokens.all { t -> nameLower.contains(t) || normName.contains(norm(t)) }
+        }.map { event ->
+            val displayName = if (event.time.isNotBlank()) "[${event.time}] ${event.title}" else event.title
+            val eventUrl = encodeEventUrl(event)
+            newLiveSearchResponse(displayName, eventUrl, TvType.Live) {
+                this.posterUrl = getPosterForSport(event.sport)
             }
-        } catch (e: Throwable) {
-            emptyList()
         }
 
-        return (channelMatches + upcomingMatches).distinctBy { it.url }
+        return (channelMatches + eventMatches).distinctBy { it.url }
     }
 
     override suspend fun load(url: String): LoadResponse {
         val cleanUrl = fixUrl(url)
+
+        // 1. Scheduled Live Event with multiple channels
+        if (cleanUrl.contains("event.php?data=")) {
+            val event = decodeEventUrl(cleanUrl)
+            if (event != null && event.channels.isNotEmpty()) {
+                val sportPoster = getPosterForSport(event.sport)
+                val eventTitle = if (event.time.isNotBlank()) "[${event.time}] ${event.title}" else event.title
+
+                return newTvSeriesLoadResponse(
+                    name = eventTitle,
+                    url = cleanUrl,
+                    type = TvType.TvSeries,
+                    episodes = event.channels.mapIndexed { index, ch ->
+                        val chWatchUrl = "$mainUrl/watch.php?id=${ch.id}"
+                        newEpisode(chWatchUrl) {
+                            this.name = "${index + 1}. ${ch.name}"
+                            this.episode = index + 1
+                            this.season = 1
+                            this.posterUrl = sportPoster
+                        }
+                    }
+                ) {
+                    this.posterUrl = sportPoster
+                    this.plot = "⏰ Başlama vaxtı: ${event.time}\n🏆 Kateqoriya: ${event.category}\n\n📺 Mövcud yayım kanalları:\n" +
+                            event.channels.joinToString("\n") { "• " + it.name }
+                }
+            }
+        }
+
+        // 2. 24/7 Channel
         val channelIdMatch = """(?:id=|stream-)(\d+)""".toRegex().find(cleanUrl)
         val channelId = channelIdMatch?.groupValues?.get(1) ?: ""
 

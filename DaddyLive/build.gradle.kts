@@ -1,4 +1,5 @@
-version = 7
+version = 8
+
 
 
 
@@ -16,7 +17,7 @@ cloudstream {
      **/
     status = 1
 
-    tvTypes = listOf("Live")
+    tvTypes = listOf("Live", "TvSeries")
     requiresResources = false
     language = "en"
     iconUrl = "https://dlive.sx/assets/logos/logo.png"
