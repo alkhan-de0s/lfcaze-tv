@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,10 +27,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
+import com.lfcaze.tv.R
 import com.lfcaze.tv.model.LiverpoolChannel
 import com.lfcaze.tv.model.LiverpoolConfig
 import com.lfcaze.tv.network.MatchRepository
@@ -59,6 +64,7 @@ fun HomeScreen() {
     var isLoading by remember { mutableStateOf(true) }
     var resolvingChannel by remember { mutableStateOf<LiverpoolChannel?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showWelcomeDialog by remember { mutableStateOf(true) }
 
     fun loadData() {
         isLoading = true
@@ -69,7 +75,7 @@ fun HomeScreen() {
             result.onSuccess {
                 config = it
             }.onFailure {
-                errorMessage = "Maç verisi alınamadı. Lütfen internet bağlantınızı kontrol edin."
+                errorMessage = "Oyun məlumatları alına bilmədi. Zəhmət olmasa internet bağlantınızı yoxlayın."
             }
         }
     }
@@ -97,7 +103,7 @@ fun HomeScreen() {
             }.onFailure { err ->
                 Toast.makeText(
                     context,
-                    "Yayın açılamadı: ${err.message ?: "Bilinmeyen hata"}",
+                    "Yayım açıla bilmədi: ${err.message ?: "Naməlum xəta"}",
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -111,32 +117,40 @@ fun HomeScreen() {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
                             shape = CircleShape,
-                            color = LfcRed,
-                            modifier = Modifier.size(32.dp)
+                            color = Color.White,
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "L",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 18.sp
-                                )
-                            }
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_olsc_logo),
+                                contentDescription = "OLSC Logo",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(3.dp),
+                                contentScale = ContentScale.Fit
+                            )
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "LFCAZE TV",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                            color = TextPrimary
-                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "OLSC Azerbaijan",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "Canlı Oyun Yayımları",
+                                fontSize = 11.sp,
+                                color = LfcGold,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 },
                 actions = {
                     IconButton(onClick = { loadData() }) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "Yenile",
+                            contentDescription = "Yenilə",
                             tint = TextPrimary
                         )
                     }
@@ -171,14 +185,15 @@ fun HomeScreen() {
                         Text(
                             text = errorMessage ?: "",
                             color = TextSecondary,
-                            fontSize = 15.sp
+                            fontSize = 15.sp,
+                            textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { loadData() },
                             colors = ButtonDefaults.buttonColors(containerColor = LfcRed)
                         ) {
-                            Text("Tekrar Dene")
+                            Text("Yenidən cəhd et")
                         }
                     }
                 }
@@ -211,7 +226,7 @@ fun HomeScreen() {
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Canlı Yayın Kanalları (${current.channels.size})",
+                                        text = "Canlı Yayım Kanalları (${current.channels.size})",
                                         color = TextPrimary,
                                         fontSize = 17.sp,
                                         fontWeight = FontWeight.Bold
@@ -242,7 +257,7 @@ fun HomeScreen() {
                     containerColor = SurfaceDark,
                     title = {
                         Text(
-                            text = "Yayın Başlatılıyor",
+                            text = "Yayım Başladılır",
                             color = TextPrimary,
                             fontWeight = FontWeight.Bold
                         )
@@ -265,7 +280,7 @@ fun HomeScreen() {
                                     fontSize = 15.sp
                                 )
                                 Text(
-                                    text = "0.5 saniyede bağlanıyor...",
+                                    text = "Əlaqə qurulur...",
                                     color = TextSecondary,
                                     fontSize = 12.sp
                                 )
@@ -273,6 +288,90 @@ fun HomeScreen() {
                         }
                     }
                 )
+            }
+
+            // Welcome Disclaimer Modal for OLSC Azerbaijan
+            if (showWelcomeDialog) {
+                Dialog(onDismissRequest = { showWelcomeDialog = false }) {
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .border(1.dp, LfcRed.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.White,
+                                modifier = Modifier.size(80.dp)
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.ic_olsc_logo),
+                                    contentDescription = "OLSC Azerbaijan",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(8.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Text(
+                                text = "OLSC Azerbaijan",
+                                color = TextPrimary,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = "Bu tətbiq yalnız OLSC Azerbaijan üçün hazırlanıb.",
+                                color = LfcGold,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 20.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Text(
+                                text = "Liverpool FC oyunlarının canlı və kəsintisiz yayımlarını buradan rahatlıqla izləyə bilərsiniz.",
+                                color = TextSecondary,
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 18.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(24.dp))
+
+                            Button(
+                                onClick = { showWelcomeDialog = false },
+                                colors = ButtonDefaults.buttonColors(containerColor = LfcRed),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(46.dp)
+                            ) {
+                                Text(
+                                    text = "Daxil ol",
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -318,15 +417,31 @@ fun MatchBannerCard(config: LiverpoolConfig?) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Team / Match Logo
-                AsyncImage(
-                    model = config?.poster?.takeIf { it.isNotBlank() }
-                        ?: "https://upload.wikimedia.org/wikipedia/en/thumb/0/0c/Liverpool_FC.svg/800px-Liverpool_FC.svg.png",
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                )
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color.White,
+                    modifier = Modifier.size(72.dp)
+                ) {
+                    if (!config?.poster.isNullOrBlank()) {
+                        AsyncImage(
+                            model = config?.poster,
+                            contentDescription = null,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(4.dp)
+                        )
+                    } else {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_olsc_logo),
+                            contentDescription = null,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(4.dp)
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(16.dp))
 
@@ -338,7 +453,7 @@ fun MatchBannerCard(config: LiverpoolConfig?) {
                             modifier = Modifier.padding(bottom = 6.dp)
                         ) {
                             Text(
-                                text = "● CANLI YAYIN",
+                                text = "● CANLI YAYIM",
                                 color = Color.White,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Black,
@@ -352,7 +467,7 @@ fun MatchBannerCard(config: LiverpoolConfig?) {
                             modifier = Modifier.padding(bottom = 6.dp)
                         ) {
                             Text(
-                                text = "BEKLEMEDE",
+                                text = "GÖZLƏMƏDƏ",
                                 color = Color.White,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
@@ -427,7 +542,7 @@ fun ChannelItemCard(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "HD 1080p • DaddyLive Stream",
+                    text = "HD 1080p • Birbaşa Yayım",
                     color = TextSecondary,
                     fontSize = 12.sp
                 )
@@ -438,7 +553,7 @@ fun ChannelItemCard(
                 shape = RoundedCornerShape(6.dp)
             ) {
                 Text(
-                    text = "İzle",
+                    text = "İzlə",
                     color = LfcGold,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
@@ -472,18 +587,18 @@ fun InactiveMatchCard() {
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Şu Anda Aktif Maç Yok",
+                text = "Hazırda Aktiv Oyun Yoxdur",
                 color = TextPrimary,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Maç günü Telegram botuna maç adı ve kanalları eklediğinizde yayınlar burada anında listelenecektir.",
+                text = "Oyun günü Telegram botuna oyun adı və kanalları əlavə edildikdə yayımlar burada dərhal göstəriləcəkdir.",
                 color = TextSecondary,
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                textAlign = TextAlign.Center
             )
         }
     }

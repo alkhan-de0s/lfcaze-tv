@@ -8,4 +8,5 @@
     <color name="surface_card">#22222D</color>
     <color name="text_primary">#FFFFFF</color>
     <color name="text_secondary">#A0A0B0</color>
+    <color name="ic_launcher_background">#FFFFFF</color>
 </resources>

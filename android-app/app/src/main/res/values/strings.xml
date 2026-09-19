@@ -1,9 +1,18 @@
 <resources>
     <string name="app_name">LFCAZE TV</string>
-    <string name="match_waiting">Sıradaki Maç Bekleniyor</string>
-    <string name="no_active_match">Şu an aktif canlı maç bulunmamaktadır. Telegram botundan maç eklendiğinde burada anında görünecektir.</string>
-    <string name="live_badge">CANLI</string>
-    <string name="streams_header">Yayın Kanalları</string>
-    <string name="loading_stream">Yayın linki çözülüyor…</string>
-    <string name="error_stream">Yayın açılamadı, lütfen başka bir yayın seçin.</string>
+    <string name="club_name">OLSC Azerbaijan</string>
+    <string name="match_waiting">Növbəti Oyun Gözlənilir</string>
+    <string name="no_active_match">Hazırda aktiv canlı oyun yayımı yoxdur. Telegram botu üzərindən oyun əlavə edildikdə burada dərhal görünəcəkdir.</string>
+    <string name="live_badge">CANLI YAYIM</string>
+    <string name="waiting_badge">GÖZLƏMƏDƏ</string>
+    <string name="streams_header">Canlı Yayım Kanalları</string>
+    <string name="loading_stream">Yayım başladılır...</string>
+    <string name="connecting">Əlaqə qurulur...</string>
+    <string name="error_stream">Yayım açıla bilmədi, zəhmət olmasa başqa kanal seçin.</string>
+    <string name="retry">Yenidən cəhd et</string>
+    <string name="refresh">Yenilə</string>
+    <string name="watch">İzlə</string>
+    <string name="welcome_dialog_title">OLSC Azerbaijan</string>
+    <string name="welcome_dialog_message">Bu tətbiq yalnız Official Supporters Club (OLSC) Azerbaijan üçün hazırlanmışdır.</string>
+    <string name="welcome_dialog_btn">Daxil ol</string>
 </resources>

@@ -101,7 +101,7 @@ class PlayerActivity : ComponentActivity() {
         val origin = intent.getStringExtra(EXTRA_ORIGIN) ?: "https://tiestep.top"
         val userAgent = intent.getStringExtra(EXTRA_USER_AGENT) ?: StreamResolver.USER_AGENT
         currentChannelId = intent.getStringExtra(EXTRA_CHANNEL_ID) ?: ""
-        currentChannelName = intent.getStringExtra(EXTRA_CHANNEL_NAME) ?: "Canlı Yayın"
+        currentChannelName = intent.getStringExtra(EXTRA_CHANNEL_NAME) ?: "Canlı Yayım"
         val matchName = intent.getStringExtra(EXTRA_MATCH_NAME) ?: "Liverpool FC"
 
         initPlayer(streamUrl, referer, origin, userAgent)
@@ -118,7 +118,7 @@ class PlayerActivity : ComponentActivity() {
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
-                        errorMessage = "Yayın başlatılamadı (${error.errorCodeName}). Tekrar deneniyor..."
+                        errorMessage = "Yayım başladıla bilmədi (${error.errorCodeName}). Yenidən cəhd edilir..."
                         exoPlayer?.prepare()
                         exoPlayer?.play()
                     }
