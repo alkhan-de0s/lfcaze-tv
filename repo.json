@@ -1,6 +1,6 @@
 {
-  "name": "LFCAZE TV",
-  "description": "DaddyLive 24/7 Live TV Channels & Sports",
+  "name": "XStream & SinemaTV",
+  "description": "DaddyLive Live TV, Sports & SinemaTV Movies/Series",
   "manifestVersion": 1,
   "pluginLists": [
     "https://raw.githubusercontent.com/alkhan-de0s/lfcaze-tv/builds/plugins.json"
