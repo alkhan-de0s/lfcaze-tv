@@ -284,6 +284,24 @@ async function registerCommands(botToken) {
   });
 }
 
+function toBase64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function fromBase64(b64) {
+  const binary = atob(b64.replace(/\s/g, ''));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 async function getLiverpoolJson(token) {
   const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${FILE_PATH}`;
   const res = await fetch(url, {
@@ -295,7 +313,7 @@ async function getLiverpoolJson(token) {
   });
   if (!res.ok) return null;
   const json = await res.json();
-  const content = atob(json.content.replace(/\s/g, ""));
+  const content = fromBase64(json.content);
   return {
     sha: json.sha,
     data: JSON.parse(content)
@@ -304,7 +322,7 @@ async function getLiverpoolJson(token) {
 
 async function updateLiverpoolJson(token, data, sha) {
   const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${FILE_PATH}`;
-  const updatedContent = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
+  const updatedContent = toBase64(JSON.stringify(data, null, 2));
   const res = await fetch(url, {
     method: "PUT",
     headers: {
@@ -321,6 +339,7 @@ async function updateLiverpoolJson(token, data, sha) {
   });
   return res.ok;
 }
+
 
 async function sendTg(botToken, chatId, text) {
   const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
