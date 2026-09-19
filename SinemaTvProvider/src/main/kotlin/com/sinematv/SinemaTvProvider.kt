@@ -5,7 +5,6 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
-import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
@@ -22,25 +21,26 @@ class SinemaTvProvider : MainAPI() {
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     override val mainPage = mainPageOf(
-        "$mainUrl/film/page/" to "Son Filmlər",
-        "$mainUrl/serial/page/" to "Seriallar",
-        "$mainUrl/xarici-filmler/page/" to "Xarici Filmlər (Azərbaycanca)",
-        "$mainUrl/turkce-filmler/page/" to "Türkcə Filmlər",
-        "$mainUrl/hind-filmleri/page/" to "Hind Filmləri",
-        "$mainUrl/mult/page/" to "Cizgi Filmləri",
-        "$mainUrl/retro-filmler/page/" to "Köhnə Filmlər"
+        "$mainUrl/film/" to "Son Filmlər",
+        "$mainUrl/serial/" to "Seriallar",
+        "$mainUrl/xarici-filmler/" to "Xarici Filmlər (Azərbaycanca)",
+        "$mainUrl/turkce-filmler/" to "Türkcə Filmlər",
+        "$mainUrl/hind-filmleri/" to "Hind Filmləri",
+        "$mainUrl/mult/" to "Cizgi Filmləri",
+        "$mainUrl/retro-filmler/" to "Köhnə Filmlər"
     )
 
     override suspend fun getMainPage(
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        val url = "${request.data}$page/"
+        val base = request.data.removeSuffix("/")
+        val url = if (page <= 1) "$base/" else "$base/page/$page/"
         val document = app.get(url).document
 
-        val home = document.select(".poster.grid-item, .custom-poster").mapNotNull {
+        val home = document.select("a.poster-item, .poster-item, .grid-item").mapNotNull {
             it.toSearchResult()
-        }
+        }.distinctBy { it.url }
 
         return newHomePageResponse(
             list = HomePageList(
@@ -53,15 +53,31 @@ class SinemaTvProvider : MainAPI() {
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val titleElement = selectFirst(".poster__title, .custom-poster__title") ?: return null
-        val title = titleElement.text().trim()
-        val href = fixUrl(selectFirst("a")?.attr("href") ?: return null)
-        val posterUrl = fixUrlNull(selectFirst("img")?.let {
-            it.attr("data-src").ifEmpty { it.attr("src") }
-        })
+        val linkElem = if (tagName() == "a" && hasAttr("href")) this else selectFirst("a[href]")
+        val href = fixUrl(linkElem?.attr("href") ?: return null)
+        if (!href.contains(".html")) return null
 
-        return newMovieSearchResponse(title, href, TvType.Movie) {
-            this.posterUrl = posterUrl
+        val title = attr("title").takeIf { it.isNotBlank() }
+            ?: selectFirst(".poster-item__title, .poster__title, h2, h3, h4")?.text()?.trim()
+            ?: linkElem.attr("title").takeIf { it.isNotBlank() }
+            ?: "Film"
+
+        val imgElem = selectFirst("img")
+        val rawImg = imgElem?.let {
+            it.attr("data-src").ifEmpty { it.attr("src") }
+        }
+        val posterUrl = fixUrlNull(rawImg)
+
+        val isSeries = href.contains("/serial/")
+
+        return if (isSeries) {
+            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+                this.posterUrl = posterUrl
+            }
+        } else {
+            newMovieSearchResponse(title, href, TvType.Movie) {
+                this.posterUrl = posterUrl
+            }
         }
     }
 
@@ -76,9 +92,9 @@ class SinemaTvProvider : MainAPI() {
             )
         ).document
 
-        return document.select(".poster.grid-item, .custom-poster").mapNotNull {
+        return document.select("a.poster-item, .poster-item, .grid-item").mapNotNull {
             it.toSearchResult()
-        }
+        }.distinctBy { it.url }
     }
 
     override suspend fun load(url: String): LoadResponse {
