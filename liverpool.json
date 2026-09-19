@@ -3,5 +3,10 @@
   "match": "Liverpool vs losers",
   "info": "Bugünkü maç yayınları",
   "poster": "https://upload.wikimedia.org/wikipedia/en/thumb/0/0c/Liverpool_FC.svg/800px-Liverpool_FC.svg.png",
-  "channels": []
+  "channels": [
+    {
+      "id": "432",
+      "name": "Yayın 1 (Arena Sport 1 Croatia)"
+    }
+  ]
 }
