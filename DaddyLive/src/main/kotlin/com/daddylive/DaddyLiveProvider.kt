@@ -4,7 +4,6 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.SubtitleFile
 import org.jsoup.nodes.Document
 import java.net.URI
 
@@ -175,7 +174,7 @@ class DaddyLiveProvider : MainAPI() {
                     lastStreamPageUrl = streamPageUrl
                     break
                 }
-            } catch (_: Throwable) {
+            } catch (err: Throwable) {
                 continue
             }
         }
@@ -202,20 +201,19 @@ class DaddyLiveProvider : MainAPI() {
         val streamUrl = DaddyLiveDecoder.extractStreamUrl(decodedJson) ?: return false
 
         callback.invoke(
-            newExtractorLink(
+            ExtractorLink(
                 source = this.name,
                 name = this.name,
                 url = streamUrl,
-                type = ExtractorLinkType.M3U8
-            ) {
-                this.referer = "$embedHost/"
-                this.quality = Qualities.Unknown.value
-                this.headers = mapOf(
+                referer = "$embedHost/",
+                quality = Qualities.Unknown.value,
+                type = ExtractorLinkType.M3U8,
+                headers = mapOf(
                     "Referer" to "$embedHost/",
                     "Origin" to embedHost,
                     "User-Agent" to userAgent
                 )
-            }
+            )
         )
 
         return true

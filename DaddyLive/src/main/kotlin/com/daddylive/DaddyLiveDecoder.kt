@@ -5,11 +5,11 @@ object DaddyLiveDecoder {
     private fun base64Decode(str: String): ByteArray {
         return try {
             android.util.Base64.decode(str, android.util.Base64.DEFAULT)
-        } catch (_: Throwable) {
+        } catch (e1: Throwable) {
             // Fallback for non-Android JVM environments (e.g. testing)
             try {
                 java.util.Base64.getDecoder().decode(str.trim())
-            } catch (_: Throwable) {
+            } catch (e2: Throwable) {
                 java.util.Base64.getMimeDecoder().decode(str.trim())
             }
         }

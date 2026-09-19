@@ -1,0 +1,8 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Enforce LF for shell scripts and Gradle wrapper
+gradlew text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
