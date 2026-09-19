@@ -1,4 +1,5 @@
-version = 1
+version = 2
+
 
 cloudstream {
     description = "DaddyLive (DLHD) 24/7 Live TV Channels & Sports"
