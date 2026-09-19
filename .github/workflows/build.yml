@@ -40,6 +40,7 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew make makePluginsJson
+          sed -i '/"fileHash":/d' build/plugins.json
 
       - name: Push to builds branch
         run: |
@@ -53,10 +54,9 @@ jobs:
           cp liverpool.json /tmp/build_artifacts/
           cp channels.json /tmp/build_artifacts/
 
-
-
           git checkout --orphan builds
           git rm -rf .
+          git clean -fdx
           
           cp /tmp/build_artifacts/* .
 
