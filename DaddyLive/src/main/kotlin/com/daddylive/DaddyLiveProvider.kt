@@ -49,7 +49,32 @@ class DaddyLiveProvider : MainAPI() {
     private var cachedScheduleBySport: Map<String, List<LiveSearchResponse>> = emptyMap()
     private var cachedAllEvents: List<ScheduleEvent> = emptyList()
     private var lastScheduleFetchTime: Long = 0L
+    private var lastScheduleDayOfYear: Int = -1
     private val scheduleCacheDurationMs = 10 * 60 * 1000L // 10 minutes
+
+    private fun getCurrentGmtCalendar(): java.util.Calendar {
+        return java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("GMT"))
+    }
+
+    private fun isTargetDay(dayTitle: String, cal: java.util.Calendar): Boolean {
+        val dayOfWeekNames = arrayOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+        val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+        val targetDayOfWeek = dayOfWeekNames[cal.get(java.util.Calendar.DAY_OF_WEEK) - 1]
+        val targetDayNum = cal.get(java.util.Calendar.DAY_OF_MONTH)
+        val targetMonth = monthNames[cal.get(java.util.Calendar.MONTH)]
+
+        val lower = dayTitle.lowercase()
+        val hasDayName = lower.contains(targetDayOfWeek.lowercase())
+        val hasMonth = lower.contains(targetMonth.lowercase())
+        val hasDayNum = lower.contains("$targetDayNum ") ||
+                lower.contains("${targetDayNum}th") ||
+                lower.contains("${targetDayNum}st") ||
+                lower.contains("${targetDayNum}nd") ||
+                lower.contains("${targetDayNum}rd")
+
+        return (hasDayName && hasMonth) || (hasMonth && hasDayNum)
+    }
 
     override val mainPage = mainPageOf(
         "24-7-channels.php" to "📺 Bütün Kanallar (24/7)",
@@ -169,21 +194,70 @@ class DaddyLiveProvider : MainAPI() {
 
     private suspend fun fetchSchedule(): Map<String, List<LiveSearchResponse>> {
         val now = System.currentTimeMillis()
-        if (cachedScheduleBySport.isNotEmpty() && (now - lastScheduleFetchTime) < scheduleCacheDurationMs) {
+        val cal = getCurrentGmtCalendar()
+        val currentDayOfYear = cal.get(java.util.Calendar.DAY_OF_YEAR)
+
+        if (cachedScheduleBySport.isNotEmpty() &&
+            currentDayOfYear == lastScheduleDayOfYear &&
+            (now - lastScheduleFetchTime) < scheduleCacheDurationMs
+        ) {
             return cachedScheduleBySport
         }
 
         return try {
             val doc = app.get(
                 "$mainUrl/",
-                headers = mapOf("User-Agent" to userAgent)
+                headers = mapOf(
+                    "User-Agent" to userAgent,
+                    "Cache-Control" to "no-cache, no-store, must-revalidate",
+                    "Pragma" to "no-cache"
+                ),
+                cacheTime = 0
             ).document
 
             val eventsList = mutableListOf<ScheduleEvent>()
             val bySport = mutableMapOf<String, MutableList<LiveSearchResponse>>()
 
-            val catElements = doc.select("div.schedule__category")
-            for (catElem in catElements) {
+            val dayElements = doc.select("div.schedule__day")
+            val targetDays: List<Pair<org.jsoup.nodes.Element, Boolean>> = if (dayElements.isNotEmpty()) {
+                val todayElem = dayElements.firstOrNull {
+                    isTargetDay(it.selectFirst(".schedule__dayTitle")?.text() ?: "", cal)
+                }
+
+                val tomorrowCal = getCurrentGmtCalendar().apply { add(java.util.Calendar.DAY_OF_MONTH, 1) }
+                val tomorrowElem = dayElements.firstOrNull {
+                    isTargetDay(it.selectFirst(".schedule__dayTitle")?.text() ?: "", tomorrowCal)
+                }
+
+                if (todayElem != null) {
+                    val list = mutableListOf<Pair<org.jsoup.nodes.Element, Boolean>>()
+                    list.add(todayElem to true)
+                    if (tomorrowElem != null) {
+                        list.add(tomorrowElem to false)
+                    }
+                    list
+                } else {
+                    val yesterdayCal = getCurrentGmtCalendar().apply { add(java.util.Calendar.DAY_OF_MONTH, -1) }
+                    val nonYesterday = dayElements.filterNot {
+                        isTargetDay(it.selectFirst(".schedule__dayTitle")?.text() ?: "", yesterdayCal)
+                    }
+                    (nonYesterday.ifEmpty { dayElements }).map { it to false }
+                }
+            } else {
+                emptyList()
+            }
+
+            val categoryScopes = if (targetDays.isNotEmpty()) {
+                targetDays.flatMap { (dayElem, isToday) ->
+                    dayElem.select("div.schedule__category").map { catElem ->
+                        catElem to isToday
+                    }
+                }
+            } else {
+                doc.select("div.schedule__category").map { it to true }
+            }
+
+            for ((catElem, isToday) in categoryScopes) {
                 val catName = catElem.selectFirst(".schedule__catHeader .card__meta, .card__meta")?.text()?.trim() ?: ""
                 val eventElements = catElem.select(".schedule__event")
                 for (evElem in eventElements) {
@@ -212,7 +286,10 @@ class DaddyLiveProvider : MainAPI() {
                     )
                     eventsList.add(event)
 
-                    val displayName = if (time.isNotBlank()) "[$time] $rawTitle" else rawTitle
+                    val timePrefix = if (time.isNotBlank()) {
+                        if (isToday) "[$time]" else "[Sabah $time]"
+                    } else ""
+                    val displayName = if (timePrefix.isNotBlank()) "$timePrefix $rawTitle" else rawTitle
                     val eventUrl = encodeEventUrl(event)
                     val poster = getPosterForSport(sport)
 
@@ -228,6 +305,7 @@ class DaddyLiveProvider : MainAPI() {
                 cachedAllEvents = eventsList
                 cachedScheduleBySport = bySport
                 lastScheduleFetchTime = now
+                lastScheduleDayOfYear = currentDayOfYear
             }
             bySport
         } catch (e: Throwable) {
