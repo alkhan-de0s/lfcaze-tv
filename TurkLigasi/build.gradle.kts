@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     description = "Türk Liqası və İdman TV - Canlı Matçlar və İdman Kanalları (beIN, S Sport, Tivibu, CBC Sport, İdman TV)"

@@ -70,7 +70,6 @@ object Extractors {
         val links = mutableListOf<ExtractorLink>()
         try {
             val authUrl = "$trgoalsDomain/auth.php"
-            val body = if (isChannel) "channel=$sourceId" else "id=$sourceId"
 
             val res = app.post(
                 authUrl,
@@ -78,7 +77,6 @@ object Extractors {
                     "User-Agent" to DEFAULT_UA,
                     "Referer" to "$trgoalsDomain/",
                     "Origin" to trgoalsDomain,
-                    "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
                     "X-Requested-With" to "XMLHttpRequest"
                 ),
                 data = mapOf(if (isChannel) "channel" to sourceId else "id" to sourceId)
@@ -89,6 +87,7 @@ object Extractors {
             val token = authData.token
 
             if (!streamUrl.isNullOrEmpty()) {
+                val playUrl = if (streamUrl.contains(".m3u8")) streamUrl else "$streamUrl#.m3u8"
                 val headers = mutableMapOf(
                     "User-Agent" to DEFAULT_UA,
                     "Referer" to "$trgoalsDomain/",
@@ -103,7 +102,7 @@ object Extractors {
                     ExtractorLink(
                         source = sourceName,
                         name = "$sourceName (FHD/HD)",
-                        url = streamUrl,
+                        url = playUrl,
                         referer = "$trgoalsDomain/",
                         quality = Qualities.P1080.value,
                         type = ExtractorLinkType.M3U8,
@@ -127,12 +126,13 @@ object Extractors {
     ): List<ExtractorLink> {
         val links = mutableListOf<ExtractorLink>()
         try {
-            val tUrl = "$domain/t?id=$matchId"
+            val cleanMatchId = Regex("""\d+""").find(matchId)?.value ?: matchId
+            val tUrl = "$domain/t?id=$cleanMatchId"
             val tRes = app.get(
                 tUrl,
                 headers = mapOf(
                     "User-Agent" to DEFAULT_UA,
-                    "Referer" to "$domain/wp-content/themes/ikisifirbirdokuz/match-center.php?id=$matchId"
+                    "Referer" to "$domain/wp-content/themes/ikisifirbirdokuz/match-center.php?id=$cleanMatchId"
                 )
             ).text
 
@@ -145,7 +145,7 @@ object Extractors {
             val verifyMatch = Regex("""\?verify=[^"'\],]+""").find(tRes)
             val verify = verifyMatch?.value ?: ""
 
-            val streamUrl = "https://$cleanDom/bc2b05d321cb80050c5d035a9daeb26d/-/$matchId/playlist.m3u8$verify"
+            val streamUrl = "https://$cleanDom/bc2b05d321cb80050c5d035a9daeb26d/-/$cleanMatchId/playlist.m3u8$verify"
 
             links.add(
                 ExtractorLink(

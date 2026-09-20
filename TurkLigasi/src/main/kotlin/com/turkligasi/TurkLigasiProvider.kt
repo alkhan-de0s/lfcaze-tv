@@ -10,6 +10,8 @@ import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.turkligasi.extractors.Extractors
 import org.jsoup.Jsoup
+import java.net.URLDecoder
+import java.net.URLEncoder
 
 class TurkLigasiProvider : MainAPI() {
     override var mainUrl = "https://www.trgoals183.top"
@@ -34,34 +36,33 @@ class TurkLigasiProvider : MainAPI() {
         val name: String,
         val trgoalsId: String = "",
         val biatId: String = "",
-        val directUrl: String = "",
-        val logo: String = ""
+        val directUrl: String = ""
     )
 
     private val tvChannels = listOf(
-        ChannelDef("beIN Sports 1 HD", trgoalsId = "100001", biatId = "zirve", logo = "https://i.imgur.com/8QeO3tL.png"),
-        ChannelDef("beIN Sports 2 HD", trgoalsId = "100002", biatId = "yayinb2", logo = "https://i.imgur.com/8QeO3tL.png"),
-        ChannelDef("beIN Sports 3 HD", trgoalsId = "100003", biatId = "yayinb3", logo = "https://i.imgur.com/8QeO3tL.png"),
-        ChannelDef("beIN Sports 4 HD", trgoalsId = "100004", biatId = "yayinb4", logo = "https://i.imgur.com/8QeO3tL.png"),
-        ChannelDef("beIN Sports 5 HD", trgoalsId = "100005", biatId = "yayinb5", logo = "https://i.imgur.com/8QeO3tL.png"),
-        ChannelDef("beIN Sports Max 1", trgoalsId = "100006", biatId = "yayinbm1", logo = "https://i.imgur.com/8QeO3tL.png"),
-        ChannelDef("beIN Sports Max 2", trgoalsId = "100007", biatId = "yayinbm2", logo = "https://i.imgur.com/8QeO3tL.png"),
-        ChannelDef("S Sport 1 HD", trgoalsId = "100010", biatId = "yayinss", logo = "https://i.imgur.com/4qJdZ9X.png"),
-        ChannelDef("S Sport 2 HD", trgoalsId = "100011", biatId = "yayinss2", logo = "https://i.imgur.com/4qJdZ9X.png"),
-        ChannelDef("Tivibu Spor 1 HD", trgoalsId = "100021", biatId = "yayint1", logo = "https://i.imgur.com/M6Lg5oH.png"),
-        ChannelDef("Tivibu Spor 2 HD", trgoalsId = "100022", biatId = "yayint2", logo = "https://i.imgur.com/M6Lg5oH.png"),
-        ChannelDef("Tivibu Spor 3 HD", trgoalsId = "100023", biatId = "yayint3", logo = "https://i.imgur.com/M6Lg5oH.png"),
-        ChannelDef("Tivibu Spor 4 HD", trgoalsId = "100024", biatId = "yayint4", logo = "https://i.imgur.com/M6Lg5oH.png"),
-        ChannelDef("Spor Smart 1 HD", trgoalsId = "100030", biatId = "yayinsm", logo = "https://i.imgur.com/Z4u5nKz.png"),
-        ChannelDef("Spor Smart 2 HD", trgoalsId = "100031", biatId = "yayinsm2", logo = "https://i.imgur.com/Z4u5nKz.png"),
-        ChannelDef("TRT Spor HD", directUrl = "https://tv-trtspor1.medya.trt.com.tr/master.m3u8", logo = "https://i.imgur.com/kYqU3U4.png"),
-        ChannelDef("TRT Spor Yıldız HD", directUrl = "https://tv-trtspor2.medya.trt.com.tr/master.m3u8", logo = "https://i.imgur.com/kYqU3U4.png"),
-        ChannelDef("TRT 1 HD", directUrl = "https://d1u68oyra9spme.cloudfront.net/master.m3u8", logo = "https://i.imgur.com/kYqU3U4.png"),
-        ChannelDef("A Spor HD", trgoalsId = "100052", biatId = "yayinas", logo = "https://i.imgur.com/YgY72B2.png"),
-        ChannelDef("TV 8.5 HD", trgoalsId = "100051", biatId = "yayintv8", logo = "https://i.imgur.com/K3V0V1B.png"),
-        ChannelDef("Eurosport 1 HD", trgoalsId = "100056", logo = "https://i.imgur.com/X4uN9oN.png"),
-        ChannelDef("Eurosport 2 HD", trgoalsId = "100057", logo = "https://i.imgur.com/X4uN9oN.png"),
-        ChannelDef("NBA TV HD", trgoalsId = "100053", logo = "https://i.imgur.com/1Gf3D9F.png")
+        ChannelDef("beIN Sports 1 HD", trgoalsId = "100001", biatId = "zirve"),
+        ChannelDef("beIN Sports 2 HD", trgoalsId = "100002", biatId = "yayinb2"),
+        ChannelDef("beIN Sports 3 HD", trgoalsId = "100003", biatId = "yayinb3"),
+        ChannelDef("beIN Sports 4 HD", trgoalsId = "100004", biatId = "yayinb4"),
+        ChannelDef("beIN Sports 5 HD", trgoalsId = "100005", biatId = "yayinb5"),
+        ChannelDef("beIN Sports Max 1", trgoalsId = "100006", biatId = "yayinbm1"),
+        ChannelDef("beIN Sports Max 2", trgoalsId = "100007", biatId = "yayinbm2"),
+        ChannelDef("S Sport 1 HD", trgoalsId = "100010", biatId = "yayinss"),
+        ChannelDef("S Sport 2 HD", trgoalsId = "100011", biatId = "yayinss2"),
+        ChannelDef("Tivibu Spor 1 HD", trgoalsId = "100021", biatId = "yayint1"),
+        ChannelDef("Tivibu Spor 2 HD", trgoalsId = "100022", biatId = "yayint2"),
+        ChannelDef("Tivibu Spor 3 HD", trgoalsId = "100023", biatId = "yayint3"),
+        ChannelDef("Tivibu Spor 4 HD", trgoalsId = "100024", biatId = "yayint4"),
+        ChannelDef("Spor Smart 1 HD", trgoalsId = "100030", biatId = "yayinsm"),
+        ChannelDef("Spor Smart 2 HD", trgoalsId = "100031", biatId = "yayinsm2"),
+        ChannelDef("TRT Spor HD", directUrl = "https://tv-trtspor1.medya.trt.com.tr/master.m3u8"),
+        ChannelDef("TRT Spor Yıldız HD", directUrl = "https://tv-trtspor2.medya.trt.com.tr/master.m3u8"),
+        ChannelDef("TRT 1 HD", directUrl = "https://d1u68oyra9spme.cloudfront.net/master.m3u8"),
+        ChannelDef("A Spor HD", trgoalsId = "100052", biatId = "yayinas"),
+        ChannelDef("TV 8.5 HD", trgoalsId = "100051", biatId = "yayintv8"),
+        ChannelDef("Eurosport 1 HD", trgoalsId = "100056"),
+        ChannelDef("Eurosport 2 HD", trgoalsId = "100057"),
+        ChannelDef("NBA TV HD", trgoalsId = "100053")
     )
 
     override val mainPage = mainPageOf(
@@ -93,28 +94,12 @@ class TurkLigasiProvider : MainAPI() {
         val list: List<SearchResponse> = when (request.data) {
             "channels" -> {
                 tvChannels.map { ch ->
-                    val payload = MatchDataPayload(
-                        title = ch.name,
-                        sport = "Canlı TV",
-                        time = "7/24",
-                        poster = ch.logo.ifEmpty { defaultPoster },
-                        sources = buildList {
-                            if (ch.trgoalsId.isNotEmpty()) {
-                                add(MatchSource("TRGoals FHD", "trgoals", ch.trgoalsId))
-                            }
-                            if (ch.biatId.isNotEmpty()) {
-                                add(MatchSource("BiatSports HD", "biatsports", ch.biatId))
-                            }
-                            if (ch.directUrl.isNotEmpty()) {
-                                add(MatchSource("Rəsmi M3U8", "direct", ch.directUrl))
-                            }
-                        }
-                    )
-                    val jsonPayload = jsonMapper.writeValueAsString(payload)
-                    val encoded = Base64.encodeToString(jsonPayload.toByteArray(), Base64.NO_WRAP)
+                    val encodedName = URLEncoder.encode(ch.name, "UTF-8")
+                    val encodedDirect = if (ch.directUrl.isNotEmpty()) URLEncoder.encode(ch.directUrl, "UTF-8") else ""
+                    val url = "$mainUrl/channel?id=${ch.trgoalsId}&biat=${ch.biatId}&direct=$encodedDirect&name=$encodedName"
 
-                    newLiveSearchResponse(ch.name, "payload:$encoded", TvType.Live) {
-                        this.posterUrl = ch.logo.ifEmpty { defaultPoster }
+                    newLiveSearchResponse(ch.name, url, TvType.Live) {
+                        this.posterUrl = defaultPoster
                     }
                 }
             }
@@ -188,11 +173,15 @@ class TurkLigasiProvider : MainAPI() {
                         )
                     )
                     val jsonPayload = jsonMapper.writeValueAsString(payload)
-                    val encoded = Base64.encodeToString(jsonPayload.toByteArray(), Base64.NO_WRAP)
+                    val encoded = Base64.encodeToString(
+                        jsonPayload.toByteArray(Charsets.UTF_8),
+                        Base64.URL_SAFE or Base64.NO_WRAP
+                    )
                     val displayName = if (time.isNotEmpty()) "[$time] $title" else title
+                    val matchUrl = "$mainUrl/match?data=$encoded"
 
                     list.add(
-                        newLiveSearchResponse(displayName, "payload:$encoded", TvType.Live) {
+                        newLiveSearchResponse(displayName, matchUrl, TvType.Live) {
                             this.posterUrl = defaultPoster
                         }
                     )
@@ -255,10 +244,14 @@ class TurkLigasiProvider : MainAPI() {
                             sources = sources
                         )
                         val jsonPayload = jsonMapper.writeValueAsString(payload)
-                        val encoded = Base64.encodeToString(jsonPayload.toByteArray(), Base64.NO_WRAP)
+                        val encoded = Base64.encodeToString(
+                            jsonPayload.toByteArray(Charsets.UTF_8),
+                            Base64.URL_SAFE or Base64.NO_WRAP
+                        )
+                        val matchUrl = "$mainUrl/match?data=$encoded"
 
                         list.add(
-                            newLiveSearchResponse(title, "payload:$encoded", TvType.Live) {
+                            newLiveSearchResponse(title, matchUrl, TvType.Live) {
                                 this.posterUrl = poster
                             }
                         )
@@ -278,22 +271,13 @@ class TurkLigasiProvider : MainAPI() {
         // 1. Search in TV Channels
         for (ch in tvChannels) {
             if (ch.name.contains(query, ignoreCase = true)) {
-                val payload = MatchDataPayload(
-                    title = ch.name,
-                    sport = "Canlı TV",
-                    poster = ch.logo.ifEmpty { defaultPoster },
-                    sources = buildList {
-                        if (ch.trgoalsId.isNotEmpty()) add(MatchSource("TRGoals FHD", "trgoals", ch.trgoalsId))
-                        if (ch.biatId.isNotEmpty()) add(MatchSource("BiatSports HD", "biatsports", ch.biatId))
-                        if (ch.directUrl.isNotEmpty()) add(MatchSource("Rəsmi M3U8", "direct", ch.directUrl))
-                    }
-                )
-                val jsonPayload = jsonMapper.writeValueAsString(payload)
-                val encoded = Base64.encodeToString(jsonPayload.toByteArray(), Base64.NO_WRAP)
+                val encodedName = URLEncoder.encode(ch.name, "UTF-8")
+                val encodedDirect = if (ch.directUrl.isNotEmpty()) URLEncoder.encode(ch.directUrl, "UTF-8") else ""
+                val url = "$mainUrl/channel?id=${ch.trgoalsId}&biat=${ch.biatId}&direct=$encodedDirect&name=$encodedName"
 
                 results.add(
-                    newLiveSearchResponse(ch.name, "payload:$encoded", TvType.Live) {
-                        this.posterUrl = ch.logo.ifEmpty { defaultPoster }
+                    newLiveSearchResponse(ch.name, url, TvType.Live) {
+                        this.posterUrl = defaultPoster
                     }
                 )
             }
@@ -317,72 +301,161 @@ class TurkLigasiProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse? {
         val domains = resolveDomains()
 
-        if (url.startsWith("payload:")) {
-            val base64 = url.removePrefix("payload:")
-            val json = String(Base64.decode(base64, Base64.DEFAULT))
-            val payload = jsonMapper.readValue<MatchDataPayload>(json)
+        // CASE 1: 24/7 TV Channel
+        if (url.contains("/channel?") || url.contains("channel?")) {
+            val id = url.substringAfter("id=", "").substringBefore("&")
+            val biat = url.substringAfter("biat=", "").substringBefore("&")
+            val direct = url.substringAfter("direct=", "").substringBefore("&")
+            val rawName = url.substringAfter("name=", "").substringBefore("&")
+            val name = try { URLDecoder.decode(rawName, "UTF-8") } catch (_: Exception) { "Canlı TV" }
 
             val episodes = mutableListOf<Episode>()
             var epIdx = 1
 
-            for (src in payload.sources) {
-                if (src.provider == "mackeyfi_page") {
-                    try {
-                        val pageHtml = app.get(src.sourceId, headers = mapOf("User-Agent" to userAgent)).text
-                        val idMatch = Regex("""match-center\.php\?id=(\d+)""").find(pageHtml)
-                        val matchId = idMatch?.groupValues?.get(1)
-
-                        if (!matchId.isNullOrEmpty()) {
-                            val ep1 = epIdx++
-                            episodes.add(
-                                newEpisode("aga:${domains.mackeyfi}:$matchId") {
-                                    this.name = "Mənbə 1: Maçkeyfi (720p HD Master)"
-                                    this.episode = ep1
-                                }
-                            )
-                            val ep2 = epIdx++
-                            episodes.add(
-                                newEpisode("aga:${domains.izlemac}:$matchId") {
-                                    this.name = "Mənbə 2: İzlemaç Ehtiyat (720p HD)"
-                                    this.episode = ep2
-                                }
-                            )
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+            if (id.isNotEmpty()) {
+                val curr = epIdx++
+                episodes.add(
+                    newEpisode("trgoals:$id") {
+                        this.name = "Mənbə $curr: TRGoals (1080p FHD)"
+                        this.episode = curr
                     }
-                } else {
-                    val currEp = epIdx++
-                    episodes.add(
-                        newEpisode("${src.provider}:${src.sourceId}") {
-                            this.name = "Yayım $currEp: ${src.name}"
-                            this.episode = currEp
-                        }
-                    )
-                }
+                )
+            }
+            if (biat.isNotEmpty()) {
+                val curr = epIdx++
+                episodes.add(
+                    newEpisode("biatsports:$biat") {
+                        this.name = "Mənbə $curr: BiatSports (HD)"
+                        this.episode = curr
+                    }
+                )
+            }
+            if (direct.isNotEmpty()) {
+                val curr = epIdx++
+                val decodedDirect = try { URLDecoder.decode(direct, "UTF-8") } catch (_: Exception) { direct }
+                episodes.add(
+                    newEpisode("direct:$decodedDirect") {
+                        this.name = "Mənbə $curr: Rəsmi M3U8"
+                        this.episode = curr
+                    }
+                )
             }
 
             if (episodes.isEmpty()) {
                 episodes.add(
                     newEpisode("trgoals:100001") {
-                        this.name = "Yayım: beIN Sports 1 HD"
+                        this.name = "Mənbə 1: beIN Sports 1 HD"
                         this.episode = 1
                     }
                 )
             }
 
             return newTvSeriesLoadResponse(
-                name = payload.title,
+                name = name,
                 url = url,
                 type = TvType.Live,
                 episodes = episodes
             ) {
-                this.posterUrl = payload.poster.ifEmpty { defaultPoster }
-                this.plot = "${payload.title} canlı yayımı. Başlama vaxtı: ${payload.time.ifEmpty { "İndi Canlı" }}"
+                this.posterUrl = defaultPoster
+                this.plot = "$name 24/7 Canlı İdman Kanalı"
             }
         }
 
-        return null
+        // CASE 2: Match event with serialized JSON data
+        val b64 = when {
+            url.contains("data=") -> url.substringAfter("data=").substringBefore("&")
+            url.contains("payload:") -> url.substringAfter("payload:").substringBefore("&")
+            else -> ""
+        }
+
+        if (b64.isNotEmpty()) {
+            val payload = try {
+                val json = String(
+                    Base64.decode(b64, Base64.URL_SAFE or Base64.DEFAULT),
+                    Charsets.UTF_8
+                )
+                jsonMapper.readValue<MatchDataPayload>(json)
+            } catch (e: Exception) {
+                null
+            }
+
+            if (payload != null) {
+                val episodes = mutableListOf<Episode>()
+                var epIdx = 1
+
+                for (src in payload.sources) {
+                    if (src.provider == "mackeyfi_page") {
+                        try {
+                            val pageHtml = app.get(src.sourceId, headers = mapOf("User-Agent" to userAgent)).text
+                            val idMatch = Regex("""match-center\.php\?id=(\d+)""").find(pageHtml)
+                            val matchId = idMatch?.groupValues?.get(1)
+
+                            if (!matchId.isNullOrEmpty()) {
+                                val ep1 = epIdx++
+                                episodes.add(
+                                    newEpisode("aga:${domains.mackeyfi}:$matchId") {
+                                        this.name = "Mənbə $ep1: Maçkeyfi (720p HD Master)"
+                                        this.episode = ep1
+                                    }
+                                )
+                                val ep2 = epIdx++
+                                episodes.add(
+                                    newEpisode("aga:${domains.izlemac}:$matchId") {
+                                        this.name = "Mənbə $ep2: İzlemaç Ehtiyat (720p HD)"
+                                        this.episode = ep2
+                                    }
+                                )
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    } else {
+                        val currEp = epIdx++
+                        episodes.add(
+                            newEpisode("${src.provider}:${src.sourceId}") {
+                                this.name = "Yayım $currEp: ${src.name}"
+                                this.episode = currEp
+                            }
+                        )
+                    }
+                }
+
+                if (episodes.isEmpty()) {
+                    episodes.add(
+                        newEpisode("trgoals:100001") {
+                            this.name = "Yayım: beIN Sports 1 HD"
+                            this.episode = 1
+                        }
+                    )
+                }
+
+                return newTvSeriesLoadResponse(
+                    name = payload.title,
+                    url = url,
+                    type = TvType.Live,
+                    episodes = episodes
+                ) {
+                    this.posterUrl = payload.poster.ifEmpty { defaultPoster }
+                    this.plot = "${payload.title} canlı yayımı. Başlama vaxtı: ${payload.time.ifEmpty { "İndi Canlı" }}"
+                }
+            }
+        }
+
+        // CASE 3: Fallback for any other match URL
+        return newTvSeriesLoadResponse(
+            name = "Canlı Matç",
+            url = url,
+            type = TvType.Live,
+            episodes = listOf(
+                newEpisode("trgoals:100001") {
+                    this.name = "Yayım: beIN Sports 1 HD"
+                    this.episode = 1
+                }
+            )
+        ) {
+            this.posterUrl = defaultPoster
+            this.plot = "Canlı İdman Yayımı"
+        }
     }
 
     override suspend fun loadLinks(
