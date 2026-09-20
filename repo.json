@@ -1,6 +1,6 @@
 {
-  "name": "XStream & SinemaTV",
-  "description": "DaddyLive Live TV, Sports & SinemaTV Movies/Series",
+  "name": "XStream & SinemaTV & Türk Liqası",
+  "description": "DaddyLive Live TV, SinemaTV Movies/Series & Türk Liqası Sports",
   "manifestVersion": 1,
   "pluginLists": [
     "https://raw.githubusercontent.com/alkhan-de0s/lfcaze-tv/builds/plugins.json"

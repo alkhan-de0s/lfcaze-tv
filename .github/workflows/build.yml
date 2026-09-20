@@ -53,6 +53,7 @@ jobs:
           cp repo.json /tmp/build_artifacts/
           cp liverpool.json /tmp/build_artifacts/
           cp channels.json /tmp/build_artifacts/
+          cp domains.json /tmp/build_artifacts/ || true
 
           git checkout --orphan builds
           git rm -rf .
