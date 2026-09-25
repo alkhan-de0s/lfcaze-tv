@@ -1,11 +1,9 @@
 package com.sinematv
 
-import com.fasterxml.jackson.core.type.TypeReference
-import com.fasterxml.jackson.databind.DeserializationFeature
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
+import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
@@ -18,61 +16,58 @@ class SinemaTvProvider : MainAPI() {
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
     override var hasMainPage = true
 
-    private val jsonMapper = jacksonObjectMapper()
-        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-
     override val mainPage = mainPageOf(
-        "$mainUrl/film/" to "Son Filmlər",
-        "$mainUrl/serial/" to "Seriallar",
-        "$mainUrl/xarici-filmler/" to "Xarici Filmlər (Azərbaycanca)",
-        "$mainUrl/turkce-filmler/" to "Türkcə Filmlər",
-        "$mainUrl/hind-filmleri/" to "Hind Filmləri",
-        "$mainUrl/mult/" to "Cizgi Filmləri"
+        "$mainUrl/film/page/" to "Son Filmlər",
+        "$mainUrl/serial/page/" to "Seriallar",
+        "$mainUrl/xarici-filmler/page/" to "Xarici Filmlər (Azərbaycanca)",
+        "$mainUrl/turkce-filmler/page/" to "Türkcə Filmlər",
+        "$mainUrl/hind-filmleri/page/" to "Hind Filmləri",
+        "$mainUrl/mult/page/" to "Cizgi Filmləri",
+        "$mainUrl/anime/page/" to "Anime",
+        "$mainUrl/new-items/page/" to "Yenilər"
     )
 
-    override suspend fun getMainPage(
-        page: Int,
-        request: MainPageRequest
-    ): HomePageResponse {
-        val base = request.data.removeSuffix("/")
-        val url = if (page <= 1) "$base/" else "$base/page/$page/"
+    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        val url = if (page <= 1) {
+            request.data.removeSuffix("/page/") + "/"
+        } else {
+            "${request.data}$page/"
+        }
+
         val document = app.get(url).document
+        val elements = document.select("#dle-content a.poster-item")
+            .ifEmpty { document.select("a.poster-item") }
 
-        // Parse from #dle-content to target actual category items and ignore header carousel
-        val container = document.selectFirst("#dle-content") ?: document
-        val home = container.select("a.poster-item, .poster-item, .grid-item, .poster").mapNotNull {
-            it.toSearchResult()
-        }.distinctBy { it.url }
-
-        return newHomePageResponse(
-            list = HomePageList(
-                name = request.name,
-                list = home,
-                isHorizontalImages = false
-            ),
-            hasNext = home.isNotEmpty()
-        )
+        val items = elements.mapNotNull { it.toSearchResponse() }
+        return newHomePageResponse(request.name, items, hasNext = items.isNotEmpty())
     }
 
-    private fun Element.toSearchResult(): SearchResponse? {
-        val linkElem = if (tagName() == "a" && hasAttr("href")) this else selectFirst("a[href]")
-        val href = fixUrl(linkElem?.attr("href") ?: return null)
-        if (!href.contains(".html")) return null
+    override suspend fun search(query: String): List<SearchResponse> {
+        val searchUrl = "$mainUrl/?do=search&subaction=search&story=$query"
+        val document = app.get(searchUrl).document
+        val elements = document.select("#dle-content a.poster-item")
+            .ifEmpty { document.select("a.poster-item") }
 
-        val title = attr("title").takeIf { it.isNotBlank() }
-            ?: selectFirst(".poster-item__title, .poster__title, h2, h3, h4")?.text()?.trim()
-            ?: linkElem.attr("title").takeIf { it.isNotBlank() }
-            ?: "Film"
+        return elements.mapNotNull { it.toSearchResponse() }
+    }
 
-        val imgElem = selectFirst("img")
-        val rawImg = imgElem?.let {
+    private fun Element.toSearchResponse(): SearchResponse? {
+        val title = selectFirst(".poster-item__title")?.text()?.trim()
+            ?: attr("title").trim().ifEmpty { null }
+            ?: return null
+
+        val rawHref = attr("href").trim()
+        if (rawHref.isEmpty()) return null
+        val href = fixUrl(rawHref)
+
+        val imgElem = selectFirst(".poster-item__img img")
+        val rawPoster = imgElem?.let {
             it.attr("data-src").ifEmpty { it.attr("src") }
         }
-        val posterUrl = fixUrlNull(rawImg)
+        val posterUrl = fixUrlNull(rawPoster)
+        val isTvSeries = href.contains("/serial/")
 
-        val isSeries = href.contains("/serial/")
-
-        return if (isSeries) {
+        return if (isTvSeries) {
             newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
                 this.posterUrl = posterUrl
             }
@@ -83,37 +78,25 @@ class SinemaTvProvider : MainAPI() {
         }
     }
 
-    override suspend fun search(query: String): List<SearchResponse> {
-        val searchUrl = "$mainUrl/index.php?do=search"
-        val document = app.post(
-            searchUrl,
-            data = mapOf(
-                "do" to "search",
-                "subaction" to "search",
-                "story" to query
-            )
-        ).document
-
-        val container = document.selectFirst("#dle-content") ?: document
-        return container.select("a.poster-item, .poster-item, .grid-item, .poster").mapNotNull {
-            it.toSearchResult()
-        }.distinctBy { it.url }
-    }
-
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
 
-        val title = document.selectFirst(".page__title, h1")?.text()?.trim() ?: "Adsız Film"
-        val posterUrl = fixUrlNull(document.selectFirst(".page__poster img")?.let {
-            it.attr("data-src").ifEmpty { it.attr("src") }
-        })
-        val year = document.selectFirst(".page__meta-item--year, a[href*='/year/']")?.text()
-            ?.filter { it.isDigit() }
-            ?.toIntOrNull()
-        val plot = document.selectFirst(".page__text, #fdesc")?.text()?.trim()
-        val genres = document.select("a[href*='/genre/']").map { it.text().trim() }
-        val actors = document.selectFirst(".page__meta-item:contains(В ролях:), .page__meta-item:contains(Rollarda:)")?.text()
-            ?.substringAfter("Rollarda:")
+        val title = document.selectFirst("h1")?.text()?.trim()
+            ?: document.selectFirst("meta[property=og:title]")?.attr("content")?.trim()
+            ?: "SinemaTV"
+
+        val rawPoster = document.selectFirst(".page__poster img")?.let {
+            it.attr("src").ifEmpty { it.attr("data-src") }
+        } ?: document.selectFirst("meta[property=og:image]")?.attr("content")
+        val posterUrl = fixUrlNull(rawPoster)
+
+        val year = document.selectFirst(".page__year")?.text()?.trim()?.toIntOrNull()
+        val plot = document.selectFirst(".page__text.full-text, .pmovie__text")?.text()?.trim()
+        val genres = document.selectFirst(".page__meta-item--genres")?.text()
+            ?.split(",")
+            ?.mapNotNull { it.trim().ifEmpty { null } }
+
+        val actors = document.selectFirst(".page__info-subinfo")?.text()
             ?.substringAfter("В ролях:")
             ?.split(",")
             ?.mapNotNull { it.trim().ifEmpty { null } }
@@ -128,9 +111,14 @@ class SinemaTvProvider : MainAPI() {
             if (src.isNotEmpty()) src else null
         }
 
-        // Look for vv-player movie_id
+        // Look for vv-player movie_id or DLE post ID from URL / script
+        val urlMovieId = Regex("""/(\d+)-[^/]+\.html""").find(url)?.groupValues?.getOrNull(1)
+        val scriptMovieId = Regex("""save_last_viewed\(['"](\d+)['"]\)""").find(document.html())?.groupValues?.getOrNull(1)
+
         val movieId = iframes.firstNotNullOfOrNull { extractMovieId(it) }
             ?: extractMovieId(document.html())
+            ?: urlMovieId
+            ?: scriptMovieId
 
         if (movieId != null) {
             val playerResult = fetchBalancerEpisodes(movieId, url)
@@ -225,12 +213,7 @@ class SinemaTvProvider : MainAPI() {
     ): Boolean {
         var foundLinks = false
 
-        val payload = try {
-            jsonMapper.readValue(data, EpisodeDataPayload::class.java)
-        } catch (e: Throwable) {
-            null
-        }
-
+        val payload = tryParseJson<EpisodeDataPayload>(data)
         val movieId = payload?.movieId?.ifEmpty { null }
         val episodeId = payload?.episodeId
         val fallbackUrl = payload?.fallbackUrl ?: if (data.startsWith("http")) data else null
@@ -250,26 +233,152 @@ class SinemaTvProvider : MainAPI() {
                     if (!streamUrl.isNullOrEmpty()) {
                         val dubTitle = variant.title?.ifEmpty { null } ?: "Standart"
                         val qualityStr = variant.streamQuality ?: "HD"
+                        val quality = getQualityFromName(qualityStr)
 
-                        callback.invoke(
-                            ExtractorLink(
-                                source = name,
-                                name = "$name - $dubTitle ($qualityStr)",
-                                url = streamUrl,
-                                referer = "$mainUrl/",
-                                quality = Qualities.P1080.value,
-                                type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
+                        if (streamUrl.contains("parsed.json")) {
+                            try {
+                                val parsedJsonText = app.get(streamUrl, referer = "$mainUrl/").text
+                                val parsedDto = tryParseJson<ParsedJsonDto>(parsedJsonText)
+                                val primarySource = parsedDto?.sources?.firstOrNull()
+
+                                // 1. Emit direct quality streams if available
+                                primarySource?.links?.forEach { linkItem ->
+                                    val src = linkItem.src?.trim()
+                                    val qStr = linkItem.quality ?: "720"
+                                    if (!src.isNullOrEmpty()) {
+                                        callback.invoke(
+                                            ExtractorLink(
+                                                source = name,
+                                                name = "$name - $dubTitle (${qStr}p)",
+                                                url = src,
+                                                referer = "$mainUrl/",
+                                                quality = getQualityFromName(qStr),
+                                                type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
+                                            )
+                                        )
+                                        foundLinks = true
+                                    }
+                                }
+
+                                // 2. Emit master adaptive grouped.m3u8
+                                val masterLink = primarySource?.link?.trim()
+                                if (!masterLink.isNullOrEmpty()) {
+                                    callback.invoke(
+                                        ExtractorLink(
+                                            source = name,
+                                            name = "$name - $dubTitle (Auto / Adaptive)",
+                                            url = masterLink,
+                                            referer = "$mainUrl/",
+                                            quality = quality,
+                                            type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
+                                        )
+                                    )
+                                    foundLinks = true
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                                callback.invoke(
+                                    ExtractorLink(
+                                        source = name,
+                                        name = "$name - $dubTitle ($qualityStr)",
+                                        url = streamUrl,
+                                        referer = "$mainUrl/",
+                                        quality = quality,
+                                        type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
+                                    )
+                                )
+                                foundLinks = true
+                            }
+                        } else {
+                            callback.invoke(
+                                ExtractorLink(
+                                    source = name,
+                                    name = "$name - $dubTitle ($qualityStr)",
+                                    url = streamUrl,
+                                    referer = "$mainUrl/",
+                                    quality = quality,
+                                    type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
+                                )
                             )
-                        )
-                        foundLinks = true
+                            foundLinks = true
+                        }
                     }
                 }
             }
         }
 
-        // 2. If fallback URL is present, inspect external players & CDN iframes
+        // 2. If fallback URL is present, inspect DLE balancer or third-party players/iframes
         if (fallbackUrl != null) {
             try {
+                if (!foundLinks) {
+                    val fallbackDleId = Regex("""/(\d+)-[^/]+\.html""").find(fallbackUrl)?.groupValues?.getOrNull(1)
+                    if (!fallbackDleId.isNullOrEmpty() && fallbackDleId != movieId) {
+                        val fallbackEpisodes = fetchBalancerEpisodes(fallbackDleId, fallbackUrl)
+                        fallbackEpisodes?.firstOrNull()?.episodeVariants?.forEach { variant ->
+                            val streamUrl = variant.filepath?.trim()
+                            if (!streamUrl.isNullOrEmpty()) {
+                                val dubTitle = variant.title?.ifEmpty { null } ?: "Standart"
+                                val qualityStr = variant.streamQuality ?: "HD"
+                                val quality = getQualityFromName(qualityStr)
+
+                                if (streamUrl.contains("parsed.json")) {
+                                    try {
+                                        val parsedJsonText = app.get(streamUrl, referer = "$mainUrl/").text
+                                        val parsedDto = tryParseJson<ParsedJsonDto>(parsedJsonText)
+                                        val primarySource = parsedDto?.sources?.firstOrNull()
+
+                                        primarySource?.links?.forEach { linkItem ->
+                                            val src = linkItem.src?.trim()
+                                            val qStr = linkItem.quality ?: "720"
+                                            if (!src.isNullOrEmpty()) {
+                                                callback.invoke(
+                                                    ExtractorLink(
+                                                        source = name,
+                                                        name = "$name - $dubTitle (${qStr}p)",
+                                                        url = src,
+                                                        referer = "$mainUrl/",
+                                                        quality = getQualityFromName(qStr),
+                                                        type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
+                                                    )
+                                                )
+                                                foundLinks = true
+                                            }
+                                        }
+
+                                        val masterLink = primarySource?.link?.trim()
+                                        if (!masterLink.isNullOrEmpty()) {
+                                            callback.invoke(
+                                                ExtractorLink(
+                                                    source = name,
+                                                    name = "$name - $dubTitle (Auto / Adaptive)",
+                                                    url = masterLink,
+                                                    referer = "$mainUrl/",
+                                                    quality = quality,
+                                                    type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
+                                                )
+                                            )
+                                            foundLinks = true
+                                        }
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                } else {
+                                    callback.invoke(
+                                        ExtractorLink(
+                                            source = name,
+                                            name = "$name - $dubTitle ($qualityStr)",
+                                            url = streamUrl,
+                                            referer = "$mainUrl/",
+                                            quality = quality,
+                                            type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
+                                        )
+                                    )
+                                    foundLinks = true
+                                }
+                            }
+                        }
+                    }
+                }
                 val doc = app.get(fallbackUrl).document
                 val iframes = doc.select("iframe").mapNotNull {
                     val src = it.attr("src").ifEmpty { it.attr("data-src") }.ifEmpty { it.attr("data-veo-src") }
@@ -279,7 +388,6 @@ class SinemaTvProvider : MainAPI() {
                 for (iframeUrl in iframes) {
                     if (iframeUrl.contains("vv-player.php")) continue
 
-                    // Standard extractor loader for third party embeds
                     loadExtractor(
                         url = iframeUrl,
                         referer = "$mainUrl/",
@@ -326,25 +434,28 @@ class SinemaTvProvider : MainAPI() {
                 "INT-VERSION" to "17.0",
                 "INT-MODULE-VERSION" to "2.4.20"
             )
+
             if (!token.isNullOrEmpty()) headers["DLE-API-TOKEN"] = token
             if (!reqId.isNullOrEmpty()) headers["Iframe-Request-Id"] = reqId
 
             val apiUrl = "$mainUrl$envBase/catalog-api/episodes?content-id=$movieId"
-            val responseText = app.get(apiUrl, headers = headers, referer = playerUrl).text
+            val episodesJson = app.get(apiUrl, headers = headers).text
 
-            try {
-                jsonMapper.readValue(responseText, object : TypeReference<List<EpisodeDto>>() {})
-            } catch (e: Throwable) {
-                try {
-                    val apiResponse = jsonMapper.readValue(responseText, BalancerApiResponse::class.java)
-                    apiResponse?.playlist ?: apiResponse?.data
-                } catch (e2: Throwable) {
-                    null
-                }
-            }
+            tryParseJson<List<EpisodeDto>>(episodesJson)
         } catch (e: Exception) {
             e.printStackTrace()
             null
+        }
+    }
+
+    private fun getQualityFromName(quality: String?): Int {
+        return when (quality?.uppercase()) {
+            "4K", "2160P", "UHD" -> Qualities.P2160.value
+            "1080P", "FHD", "BDRIP" -> Qualities.P1080.value
+            "720P", "HD", "WEBRIP" -> Qualities.P720.value
+            "480P", "SD" -> Qualities.P480.value
+            "360P" -> Qualities.P360.value
+            else -> Qualities.P1080.value
         }
     }
 }

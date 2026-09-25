@@ -2,11 +2,6 @@ package com.sinematv
 
 import com.fasterxml.jackson.annotation.JsonProperty
 
-data class BalancerApiResponse(
-    @JsonProperty("playlist") val playlist: List<EpisodeDto>? = null,
-    @JsonProperty("data") val data: List<EpisodeDto>? = null
-)
-
 data class EpisodeDto(
     @JsonProperty("id") val id: Long? = null,
     @JsonProperty("title") val title: String? = null,
@@ -48,4 +43,19 @@ data class EpisodeDataPayload(
     @JsonProperty("movieId") val movieId: String,
     @JsonProperty("episodeId") val episodeId: Long? = null,
     @JsonProperty("fallbackUrl") val fallbackUrl: String? = null
+)
+
+data class ParsedJsonDto(
+    @JsonProperty("sources") val sources: List<ParsedSourceDto>? = null
+)
+
+data class ParsedSourceDto(
+    @JsonProperty("label") val label: String? = null,
+    @JsonProperty("link") val link: String? = null,
+    @JsonProperty("links") val links: List<ParsedLinkDto>? = null
+)
+
+data class ParsedLinkDto(
+    @JsonProperty("quality") val quality: String? = null,
+    @JsonProperty("src") val src: String? = null
 )
