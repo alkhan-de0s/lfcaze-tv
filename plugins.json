@@ -1,0 +1,62 @@
+[
+    {
+        "iconUrl": "https://dlive.sx/assets/logos/logo.png",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/alkhan-de0s/lfcaze-tv",
+        "fileSize": 26839,
+        "status": 1,
+        "language": "en",
+        "authors": [
+            "Custom"
+        ],
+        "tvTypes": [
+            "Live",
+            "TvSeries"
+        ],
+        "version": 9,
+        "internalName": "DaddyLive",
+        "description": "DaddyLive (DLHD) 24/7 Live TV Channels & Sports",
+        "url": "https://raw.githubusercontent.com/alkhan-de0s/lfcaze-tv/builds/DaddyLive.cs3",
+        "name": "DaddyLive"
+    },
+    {
+        "iconUrl": "https://sinematv.az/templates/NewFlix/images/favicon.svg",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/alkhan-de0s/lfcaze-tv",
+        "fileSize": 35155,
+        "status": 1,
+        "language": "az",
+        "authors": [
+            "Antigravity"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 5,
+        "internalName": "SinemaTvProvider",
+        "description": "SinemaTV.az \u00fc\u00e7\u00fcn Cloudstream 3 provayderi. Film v\u0259 seriallar\u0131 y\u00fcks\u0259k keyfiyy\u0259td\u0259 (Full HD / M3U8) izl\u0259m\u0259k \u00fc\u00e7\u00fcn.",
+        "url": "https://raw.githubusercontent.com/alkhan-de0s/lfcaze-tv/builds/SinemaTvProvider.cs3",
+        "name": "SinemaTvProvider"
+    },
+    {
+        "iconUrl": "https://raw.githubusercontent.com/alkhan-de0s/lfcaze-tv/master/TurkLigasi/icon.png",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/alkhan-de0s/lfcaze-tv",
+        "fileSize": 34057,
+        "status": 1,
+        "language": "az",
+        "authors": [
+            "Antigravity"
+        ],
+        "tvTypes": [
+            "Live",
+            "TvSeries"
+        ],
+        "version": 2,
+        "internalName": "TurkLigasi",
+        "description": "T\u00fcrk Liqas\u0131 v\u0259 \u0130dman TV - Canl\u0131 Mat\u00e7lar v\u0259 \u0130dman Kanallar\u0131 (beIN, S Sport, Tivibu, CBC Sport, \u0130dman TV)",
+        "url": "https://raw.githubusercontent.com/alkhan-de0s/lfcaze-tv/builds/TurkLigasi.cs3",
+        "name": "TurkLigasi"
+    }
+]
