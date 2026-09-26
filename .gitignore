@@ -15,4 +15,4 @@ captures/
 *.cs3
 builds/
 scratch/
-
+.kotlin/
