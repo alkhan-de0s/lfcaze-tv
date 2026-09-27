@@ -1,5 +1,6 @@
 package com.sinematv
 
+import android.util.Base64
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
@@ -7,7 +8,14 @@ import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
+import okhttp3.Dns
+import okhttp3.Request
 import org.jsoup.nodes.Element
+import java.net.InetAddress
+import java.security.MessageDigest
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 class SinemaTvProvider : MainAPI() {
     override var name = "SinemaTV"
@@ -26,6 +34,26 @@ class SinemaTvProvider : MainAPI() {
         "$mainUrl/anime/page/" to "Anime",
         "$mainUrl/new-items/page/" to "Yenilər"
     )
+
+    private val gorodyshkaDns = object : Dns {
+        override fun lookup(hostname: String): List<InetAddress> {
+            if (hostname == "gorodyshka.link") {
+                return listOf(
+                    InetAddress.getByAddress("gorodyshka.link", byteArrayOf(76.toByte(), 164.toByte(), 203.toByte(), 166.toByte())),
+                    InetAddress.getByAddress("gorodyshka.link", byteArrayOf(76.toByte(), 164.toByte(), 203.toByte(), 170.toByte())),
+                    InetAddress.getByAddress("gorodyshka.link", byteArrayOf(2.toByte(), 59.toByte(), 219.toByte(), 121.toByte()))
+                )
+            }
+            return Dns.SYSTEM.lookup(hostname)
+        }
+    }
+
+    private val balancerClient by lazy {
+        app.baseClient.newBuilder()
+            .dns(gorodyshkaDns)
+            .followRedirects(false)
+            .build()
+    }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = if (page <= 1) {
@@ -108,17 +136,12 @@ class SinemaTvProvider : MainAPI() {
         // Extract player iframes
         val iframes = document.select("iframe").mapNotNull {
             val src = it.attr("src").ifEmpty { it.attr("data-src") }.ifEmpty { it.attr("data-veo-src") }
-            if (src.isNotEmpty()) src else null
+            if (src.isNotEmpty()) fixUrl(src) else null
         }
 
-        // Look for vv-player movie_id or DLE post ID from URL / script
-        val urlMovieId = Regex("""/(\d+)-[^/]+\.html""").find(url)?.groupValues?.getOrNull(1)
-        val scriptMovieId = Regex("""save_last_viewed\(['"](\d+)['"]\)""").find(document.html())?.groupValues?.getOrNull(1)
-
+        // Only search for balancer movie_id in iframes and document HTML when explicitly present
         val movieId = iframes.firstNotNullOfOrNull { extractMovieId(it) }
             ?: extractMovieId(document.html())
-            ?: urlMovieId
-            ?: scriptMovieId
 
         if (movieId != null) {
             val playerResult = fetchBalancerEpisodes(movieId, url)
@@ -174,9 +197,9 @@ class SinemaTvProvider : MainAPI() {
             }
         }
 
-        // Fallback if no balancer episodes found
+        // Fallback for movies/serials without balancer (e.g. cdn1.sinematv.az)
         val isTvSeries = url.contains("/serial/")
-        val payload = EpisodeDataPayload(movieId = movieId ?: "", fallbackUrl = url).toJson()
+        val payload = EpisodeDataPayload(movieId = null, fallbackUrl = url).toJson()
 
         return if (isTvSeries) {
             val fallbackEpisode = newEpisode(payload) {
@@ -218,7 +241,7 @@ class SinemaTvProvider : MainAPI() {
         val episodeId = payload?.episodeId
         val fallbackUrl = payload?.fallbackUrl ?: if (data.startsWith("http")) data else null
 
-        // 1. Try to load direct M3U8 streams from SinemaTV Balancer API
+        // 1. Try to load direct M3U8 streams from SinemaTV Balancer API (when real movieId is present)
         if (movieId != null) {
             val episodes = fetchBalancerEpisodes(movieId, fallbackUrl ?: mainUrl)
             if (episodes != null) {
@@ -246,11 +269,12 @@ class SinemaTvProvider : MainAPI() {
                                     val src = linkItem.src?.trim()
                                     val qStr = linkItem.quality ?: "720"
                                     if (!src.isNullOrEmpty()) {
+                                        val resolvedSrc = resolveBalancerUrl(src)
                                         callback.invoke(
                                             ExtractorLink(
                                                 source = name,
                                                 name = "$name - $dubTitle (${qStr}p)",
-                                                url = src,
+                                                url = resolvedSrc,
                                                 referer = "$mainUrl/",
                                                 quality = getQualityFromName(qStr),
                                                 type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
@@ -263,11 +287,12 @@ class SinemaTvProvider : MainAPI() {
                                 // 2. Emit master adaptive grouped.m3u8
                                 val masterLink = primarySource?.link?.trim()
                                 if (!masterLink.isNullOrEmpty()) {
+                                    val resolvedMaster = resolveBalancerUrl(masterLink)
                                     callback.invoke(
                                         ExtractorLink(
                                             source = name,
                                             name = "$name - $dubTitle (Auto / Adaptive)",
-                                            url = masterLink,
+                                            url = resolvedMaster,
                                             referer = "$mainUrl/",
                                             quality = quality,
                                             type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
@@ -277,11 +302,12 @@ class SinemaTvProvider : MainAPI() {
                                 }
                             } catch (e: Exception) {
                                 e.printStackTrace()
+                                val resolved = resolveBalancerUrl(streamUrl)
                                 callback.invoke(
                                     ExtractorLink(
                                         source = name,
                                         name = "$name - $dubTitle ($qualityStr)",
-                                        url = streamUrl,
+                                        url = resolved,
                                         referer = "$mainUrl/",
                                         quality = quality,
                                         type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
@@ -290,11 +316,12 @@ class SinemaTvProvider : MainAPI() {
                                 foundLinks = true
                             }
                         } else {
+                            val resolved = resolveBalancerUrl(streamUrl)
                             callback.invoke(
                                 ExtractorLink(
                                     source = name,
                                     name = "$name - $dubTitle ($qualityStr)",
-                                    url = streamUrl,
+                                    url = resolved,
                                     referer = "$mainUrl/",
                                     quality = quality,
                                     type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
@@ -307,78 +334,9 @@ class SinemaTvProvider : MainAPI() {
             }
         }
 
-        // 2. If fallback URL is present, inspect DLE balancer or third-party players/iframes
+        // 2. Inspect fallback page for cdn1.sinematv.az and other video embed iframes
         if (fallbackUrl != null) {
             try {
-                if (!foundLinks) {
-                    val fallbackDleId = Regex("""/(\d+)-[^/]+\.html""").find(fallbackUrl)?.groupValues?.getOrNull(1)
-                    if (!fallbackDleId.isNullOrEmpty() && fallbackDleId != movieId) {
-                        val fallbackEpisodes = fetchBalancerEpisodes(fallbackDleId, fallbackUrl)
-                        fallbackEpisodes?.firstOrNull()?.episodeVariants?.forEach { variant ->
-                            val streamUrl = variant.filepath?.trim()
-                            if (!streamUrl.isNullOrEmpty()) {
-                                val dubTitle = variant.title?.ifEmpty { null } ?: "Standart"
-                                val qualityStr = variant.streamQuality ?: "HD"
-                                val quality = getQualityFromName(qualityStr)
-
-                                if (streamUrl.contains("parsed.json")) {
-                                    try {
-                                        val parsedJsonText = app.get(streamUrl, referer = "$mainUrl/").text
-                                        val parsedDto = tryParseJson<ParsedJsonDto>(parsedJsonText)
-                                        val primarySource = parsedDto?.sources?.firstOrNull()
-
-                                        primarySource?.links?.forEach { linkItem ->
-                                            val src = linkItem.src?.trim()
-                                            val qStr = linkItem.quality ?: "720"
-                                            if (!src.isNullOrEmpty()) {
-                                                callback.invoke(
-                                                    ExtractorLink(
-                                                        source = name,
-                                                        name = "$name - $dubTitle (${qStr}p)",
-                                                        url = src,
-                                                        referer = "$mainUrl/",
-                                                        quality = getQualityFromName(qStr),
-                                                        type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
-                                                    )
-                                                )
-                                                foundLinks = true
-                                            }
-                                        }
-
-                                        val masterLink = primarySource?.link?.trim()
-                                        if (!masterLink.isNullOrEmpty()) {
-                                            callback.invoke(
-                                                ExtractorLink(
-                                                    source = name,
-                                                    name = "$name - $dubTitle (Auto / Adaptive)",
-                                                    url = masterLink,
-                                                    referer = "$mainUrl/",
-                                                    quality = quality,
-                                                    type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
-                                                )
-                                            )
-                                            foundLinks = true
-                                        }
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                    }
-                                } else {
-                                    callback.invoke(
-                                        ExtractorLink(
-                                            source = name,
-                                            name = "$name - $dubTitle ($qualityStr)",
-                                            url = streamUrl,
-                                            referer = "$mainUrl/",
-                                            quality = quality,
-                                            type = com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
-                                        )
-                                    )
-                                    foundLinks = true
-                                }
-                            }
-                        }
-                    }
-                }
                 val doc = app.get(fallbackUrl).document
                 val iframes = doc.select("iframe").mapNotNull {
                     val src = it.attr("src").ifEmpty { it.attr("data-src") }.ifEmpty { it.attr("data-veo-src") }
@@ -388,13 +346,18 @@ class SinemaTvProvider : MainAPI() {
                 for (iframeUrl in iframes) {
                     if (iframeUrl.contains("vv-player.php")) continue
 
-                    loadExtractor(
-                        url = iframeUrl,
-                        referer = "$mainUrl/",
-                        subtitleCallback = subtitleCallback,
-                        callback = callback
-                    )
-                    foundLinks = true
+                    if (iframeUrl.contains("cdn1.sinematv.az")) {
+                        val cdnFound = extractCdn1Streams(iframeUrl, callback)
+                        if (cdnFound) foundLinks = true
+                    } else {
+                        loadExtractor(
+                            url = iframeUrl,
+                            referer = "$mainUrl/",
+                            subtitleCallback = subtitleCallback,
+                            callback = callback
+                        )
+                        foundLinks = true
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -402,6 +365,118 @@ class SinemaTvProvider : MainAPI() {
         }
 
         return foundLinks
+    }
+
+    private suspend fun extractCdn1Streams(iframeUrl: String, callback: (ExtractorLink) -> Unit): Boolean {
+        return try {
+            val html = app.get(iframeUrl, referer = "$mainUrl/").text
+            val datasMatch = Regex("""const\s+datas\s*=\s*"([^"]+)"""").find(html) ?: return false
+            val b64 = datasMatch.groupValues[1]
+
+            val rawJson = String(Base64.decode(b64, Base64.DEFAULT), Charsets.ISO_8859_1)
+            val datas = tryParseJson<Cdn1DatasDto>(rawJson) ?: return false
+            val mediaStr = datas.media ?: return false
+            val slug = datas.slug ?: return false
+            val md5Id = datas.md5Id ?: return false
+            val userId = datas.userId ?: return false
+
+            val mediaBytes = ByteArray(mediaStr.length) { i -> mediaStr[i].code.toByte() }
+            val mediaKey = "$userId:$slug:$md5Id"
+            val keyHex = md5Hex(mediaKey.toByteArray(Charsets.UTF_8))
+            val keyBytes = keyHex.toByteArray(Charsets.UTF_8)
+            val ivBytes = keyBytes.copyOfRange(0, 16)
+
+            val cipher = Cipher.getInstance("AES/CTR/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), IvParameterSpec(ivBytes))
+            val decryptedBytes = cipher.doFinal(mediaBytes)
+            val decryptedJson = String(decryptedBytes, Charsets.UTF_8)
+
+            val abyssMedia = tryParseJson<AbyssMediaDto>(decryptedJson) ?: return false
+            val sources = abyssMedia.mp4?.sources ?: return false
+            val domains = abyssMedia.mp4?.domains ?: return false
+            var found = false
+
+            sources.forEach { source ->
+                val size = source.size ?: return@forEach
+                val resId = source.resId ?: return@forEach
+                val sub = source.sub ?: ""
+                val domain = domains.firstOrNull { it.contains(sub) } ?: domains.firstOrNull() ?: return@forEach
+
+                val sizeDigits = size.toString().map { it.digitToInt().toByte() }.toByteArray()
+                val sizeMd5Hex = md5Hex(sizeDigits)
+                val encKeyBytes = sizeMd5Hex.toByteArray(Charsets.UTF_8)
+                val encIvBytes = encKeyBytes.copyOfRange(0, 16)
+
+                val path = "/mp4/$md5Id/$resId/$size?v=$slug"
+                val encCipher = Cipher.getInstance("AES/CTR/NoPadding")
+                encCipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(encKeyBytes, "AES"), IvParameterSpec(encIvBytes))
+                val encryptedPathBytes = encCipher.doFinal(path.toByteArray(Charsets.UTF_8))
+
+                val b1 = Base64.encodeToString(encryptedPathBytes, Base64.NO_WRAP).replace("=", "")
+                val b2 = Base64.encodeToString(b1.toByteArray(Charsets.ISO_8859_1), Base64.NO_WRAP).replace("=", "")
+
+                val soraUrl = "https://$domain/sora/$size/$b2"
+                val directUrl = try {
+                    val res = app.get(
+                        soraUrl,
+                        headers = mapOf("Referer" to "https://abysscdn.com/"),
+                        allowRedirects = false
+                    )
+                    if (res.code in 300..399 && !res.headers["location"].isNullOrEmpty()) {
+                        res.headers["location"]!!
+                    } else {
+                        soraUrl
+                    }
+                } catch (e: Exception) {
+                    soraUrl
+                }
+
+                callback.invoke(
+                    ExtractorLink(
+                        source = name,
+                        name = "$name - ${source.label ?: "HD"} (Direct)",
+                        url = directUrl,
+                        referer = "https://abysscdn.com/",
+                        quality = getQualityFromName(source.label),
+                        type = com.lagradost.cloudstream3.utils.ExtractorLinkType.VIDEO
+                    )
+                )
+                found = true
+            }
+
+            found
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    private fun md5Hex(data: ByteArray): String {
+        val md = MessageDigest.getInstance("MD5")
+        val digest = md.digest(data)
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun resolveBalancerUrl(url: String): String {
+        if (!url.contains("gorodyshka.link")) return url
+        return try {
+            val req = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .header("Referer", "$mainUrl/")
+                .build()
+            balancerClient.newCall(req).execute().use { response ->
+                val location = response.header("Location")
+                if (!location.isNullOrEmpty()) {
+                    location
+                } else {
+                    url
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            url
+        }
     }
 
     private fun extractMovieId(text: String): String? {

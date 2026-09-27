@@ -40,7 +40,7 @@ data class ContentDetailsDto(
 )
 
 data class EpisodeDataPayload(
-    @JsonProperty("movieId") val movieId: String,
+    @JsonProperty("movieId") val movieId: String? = null,
     @JsonProperty("episodeId") val episodeId: Long? = null,
     @JsonProperty("fallbackUrl") val fallbackUrl: String? = null
 )
@@ -58,4 +58,29 @@ data class ParsedSourceDto(
 data class ParsedLinkDto(
     @JsonProperty("quality") val quality: String? = null,
     @JsonProperty("src") val src: String? = null
+)
+
+data class Cdn1DatasDto(
+    @JsonProperty("slug") val slug: String? = null,
+    @JsonProperty("md5_id") val md5Id: Long? = null,
+    @JsonProperty("user_id") val userId: Long? = null,
+    @JsonProperty("media") val media: String? = null
+)
+
+data class AbyssMediaDto(
+    @JsonProperty("mp4") val mp4: AbyssMp4Dto? = null
+)
+
+data class AbyssMp4Dto(
+    @JsonProperty("sources") val sources: List<AbyssSourceDto>? = null,
+    @JsonProperty("domains") val domains: List<String>? = null
+)
+
+data class AbyssSourceDto(
+    @JsonProperty("label") val label: String? = null,
+    @JsonProperty("res_id") val resId: Int? = null,
+    @JsonProperty("size") val size: Long? = null,
+    @JsonProperty("codec") val codec: String? = null,
+    @JsonProperty("status") val status: Boolean? = null,
+    @JsonProperty("sub") val sub: String? = null
 )
